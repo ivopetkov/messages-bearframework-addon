@@ -23,6 +23,9 @@ class DataTest extends BearFrameworkAddonTestCase
         $threadID2 = $app->messages->createThread(['user1', 'user2']);
         $this->assertTrue($threadID === $threadID2);
 
+        $user1Thread = $app->messages->getUserThread('user1', $threadID);
+        $this->assertTrue($user1Thread->lastMessage === null);
+
         $app->messages->add($threadID, 'user1', 'hi1');
 
         $user1Thread = $app->messages->getUserThread('user1', $threadID);
@@ -55,6 +58,7 @@ class DataTest extends BearFrameworkAddonTestCase
         $this->assertTrue($user2Thread->messagesList[0]->text === 'hi1');
         $this->assertTrue($user2Thread->messagesList[1]->userID === 'user2');
         $this->assertTrue($user2Thread->messagesList[1]->text === 'hi2');
+        $this->assertTrue($user2Thread->lastMessage->text === 'hi2');
     }
 
     /**

@@ -14,6 +14,7 @@ use BearFramework\App;
 /**
  * @property-read array $usersIDs An array containing the users IDs that can participate in the thread.
  * @property-read \IvoPetkov\DataList|IvoPetkov\BearFrameworkAddons\Messages\Message[] $messagesList A list containing all messages in the thread.
+ * @property-read ?BearFrameworkAddons\Messages\Message $lastMessage The last message in the thread
  */
 class Thread
 {
@@ -68,6 +69,25 @@ class Thread
                             }
                             return $result;
                         });
+            },
+            'readonly' => true
+        ]);
+
+        $this->defineProperty('lastMessage', [
+            'init' => function() use ($getThreadData) {
+                $threadData = $getThreadData();
+                if (is_array($threadData) && isset($threadData['messages'])) {
+                    $lastMessageData = end($threadData['messages']);
+                    if ($lastMessageData !== false) {
+                        $message = new Message();
+                        $message->id = $lastMessageData['id'];
+                        $message->userID = $lastMessageData['userID'];
+                        $message->text = $lastMessageData['text'];
+                        $message->dateCreated = $lastMessageData['dateCreated'];
+                        return $message;
+                    }
+                }
+                return null;
             },
             'readonly' => true
         ]);
