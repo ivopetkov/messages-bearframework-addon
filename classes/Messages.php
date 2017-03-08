@@ -18,6 +18,32 @@ use IvoPetkov\BearFrameworkAddons\Messages\UserThread;
 class Messages
 {
 
+    public function getUsersThreadsList(array $usersIDs): \IvoPetkov\DataList
+    {
+        return new \IvoPetkov\DataList(function() use ($usersIDs) {
+            $tempTesult = [];
+            $lastUpdatedDates = [];
+            foreach ($usersIDs as $userID) {
+                $userData = $this->getUserData($userID);
+                if (is_array($userData)) {
+                    $tempUserData = $this->getTempUserData($userID);
+                    foreach ($userData['threads'] as $threadData) {
+                        $threadID = $threadData['id'];
+                        $lastUpdateDate = isset($tempUserData['threadsData'][$threadID]) ? $tempUserData['threadsData'][$threadID][1] : null;
+                        $lastUpdatedDates[] = $lastUpdateDate;
+                        $tempTesult[] = $this->getUserThread($userID, $threadID);
+                    }
+                }
+            }
+            arsort($lastUpdatedDates);
+            $result = [];
+            foreach ($lastUpdatedDates as $index => $lastUpdateDate) {
+                $result[] = $tempTesult[$index];
+            }
+            return $result;
+        });
+    }
+
     /**
      * 
      * @param string $userID
@@ -25,27 +51,7 @@ class Messages
      */
     public function getUserThreadsList(string $userID): \IvoPetkov\DataList
     {
-        return new \IvoPetkov\DataList(function() use ($userID) {
-            $userData = $this->getUserData($userID);
-            if (is_array($userData)) {
-                $tempTesult = [];
-                $lastUpdatedDates = [];
-                $tempUserData = $this->getTempUserData($userID);
-                foreach ($userData['threads'] as $threadData) {
-                    $threadID = $threadData['id'];
-                    $lastUpdateDate = isset($tempUserData['threadsData'][$threadID]) ? $tempUserData['threadsData'][$threadID][1] : null;
-                    $lastUpdatedDates[] = $lastUpdateDate;
-                    $tempTesult[] = $this->getUserThread($userID, $threadID);
-                }
-                arsort($lastUpdatedDates);
-                $result = [];
-                foreach ($lastUpdatedDates as $index => $lastUpdateDate) {
-                    $result[] = $tempTesult[$index];
-                }
-                return $result;
-            }
-            return [];
-        });
+        return $this->getUsersThreadsList([$userID]);
     }
 
     /**

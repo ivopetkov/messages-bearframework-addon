@@ -78,4 +78,29 @@ class DataTest extends BearFrameworkAddonTestCase
         $this->assertTrue($list[1]->messagesList[0]->text === 'hi user2');
     }
 
+    /**
+     * 
+     */
+    public function testUsersList()
+    {
+        $app = $this->getApp();
+
+        $threadID = $app->messages->createThread(['user1', 'user2']);
+        $app->messages->add($threadID, 'user1', 'hi user2');
+        $threadID = $app->messages->createThread(['user1', 'user3']);
+        $app->messages->add($threadID, 'user1', 'hi user3');
+
+        $threadID = $app->messages->createThread(['userA', 'user2']);
+        $app->messages->add($threadID, 'userA', 'hi user2, its userA');
+        $threadID = $app->messages->createThread(['userA', 'userB']);
+        $app->messages->add($threadID, 'userA', 'hi userB');
+
+        $list = $app->messages->getUsersThreadsList(['user1', 'userA']);
+        $this->assertTrue($list->length === 4);
+        $this->assertTrue($list[0]->messagesList[0]->text === 'hi userB');
+        $this->assertTrue($list[1]->messagesList[0]->text === 'hi user2, its userA');
+        $this->assertTrue($list[2]->messagesList[0]->text === 'hi user3');
+        $this->assertTrue($list[3]->messagesList[0]->text === 'hi user2');
+    }
+
 }
