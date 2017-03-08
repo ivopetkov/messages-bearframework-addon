@@ -26,14 +26,25 @@ class Messages
     public function getUserThreadsList(string $userID): \IvoPetkov\DataList
     {
         return new \IvoPetkov\DataList(function() use ($userID) {
-            $result = [];
             $userData = $this->getUserData($userID);
             if (is_array($userData)) {
+                $tempTesult = [];
+                $lastUpdatedDates = [];
+                $tempUserData = $this->getTempUserData($userID);
                 foreach ($userData['threads'] as $threadData) {
-                    $result[] = $this->getUserThread($userID, $threadData['id']);
+                    $threadID = $threadData['id'];
+                    $lastUpdateDate = isset($tempUserData['threadsData'][$threadID]) ? $tempUserData['threadsData'][$threadID][1] : null;
+                    $lastUpdatedDates[] = $lastUpdateDate;
+                    $tempTesult[] = $this->getUserThread($userID, $threadID);
                 }
+                arsort($lastUpdatedDates);
+                $result = [];
+                foreach ($lastUpdatedDates as $index => $lastUpdateDate) {
+                    $result[] = $tempTesult[$index];
+                }
+                return $result;
             }
-            return $result;
+            return [];
         });
     }
 
@@ -49,12 +60,12 @@ class Messages
         $userThread->id = $threadID;
         $read = true;
         $userData = $this->getUserData($userID);
-        $tempUserData = $this->getTempUserData($userID);
         if (is_array($userData)) {
+            $tempUserData = $this->getTempUserData($userID);
             foreach ($userData['threads'] as $threadData) {
                 if ($threadData['id'] === $threadID) {
-                    if (isset($threadData['lastReadMessageID'], $tempUserData['threadsLastMessagesIDs'][$threadID])) {
-                        $read = $threadData['lastReadMessageID'] === $tempUserData['threadsLastMessagesIDs'][$threadID];
+                    if (isset($threadData['lastReadMessageID'], $tempUserData['threadsData'][$threadID])) {
+                        $read = $threadData['lastReadMessageID'] === $tempUserData['threadsData'][$threadID][0];
                         break;
                     } else {
                         $read = false;
@@ -99,13 +110,13 @@ class Messages
         }
         $tempUserData = [];
         $tempUserData['id'] = $userID;
-        $tempUserData['threadsLastMessagesIDs'] = [];
+        $tempUserData['threadsData'] = [];
 
         $userData = $this->getUserData($userID);
         foreach ($userData['threads'] as $threadData) {
             $threadData = $this->getThreadData($threadData['id']);
             $lastMessage = end($threadData['messages']);
-            $tempUserData['threadsLastMessagesIDs'][$threadData['id']] = $lastMessage !== false ? $lastMessage['id'] : null;
+            $tempUserData['threadsData'][$threadData['id']] = $lastMessage !== false ? [$lastMessage['id'], $lastMessage['dateCreated']] : [null, null];
         }
         $this->setTempUserData($userID, $tempUserData);
 
@@ -223,10 +234,12 @@ class Messages
             throw new \Exception('Invalid thread ' . $threadID);
         }
         $messageID = md5(uniqid());
+        $messageTime = time();
+        $messageMicrotime = microtime(true);
         $threadData['messages'][] = [
             'id' => $messageID,
             'userID' => $userID,
-            'dateCreated' => time(),
+            'dateCreated' => $messageTime,
             'text' => $text
         ];
         $userData = $this->getUserData($userID);
@@ -241,7 +254,7 @@ class Messages
         $this->setThreadData($threadID, $threadData);
         foreach ($threadData['usersIDs'] as $userID) {
             $tempUserData = $this->getTempUserData($userID);
-            $tempUserData['threadsLastMessagesIDs'][$threadID] = $messageID;
+            $tempUserData['threadsData'][$threadID] = [$messageID, $messageMicrotime];
             $this->setTempUserData($userID, $tempUserData);
         }
     }
