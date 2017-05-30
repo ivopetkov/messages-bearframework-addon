@@ -32,7 +32,8 @@ class Thread
 
         $getThreadData = function() {
             $app = App::get();
-            $threadDataKey = 'messages/thread/' . md5($this->id) . '.json';
+            $idMD5 = md5($this->id);
+            $threadDataKey = 'messages/thread/' . substr($idMD5, 0, 2) . '/' . substr($idMD5, 2, 2) . '/' . $idMD5 . '.json';
             $threadDataValue = $app->data->getValue($threadDataKey);
             if ($threadDataValue !== null) {
                 $threadData = json_decode($threadDataValue, true);

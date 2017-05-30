@@ -20,6 +20,7 @@ class Messages
 
     public function getUsersThreadsList(array $usersIDs): \IvoPetkov\DataList
     {
+        $usersIDs = array_unique($usersIDs);
         return new \IvoPetkov\DataList(function() use ($usersIDs) {
             $tempTesult = [];
             $lastUpdatedDates = [];
@@ -106,7 +107,8 @@ class Messages
     private function getTempUserData($userID)
     {
         $app = App::get();
-        $tempUserDataKey = '.temp/messages/user/' . md5($userID) . '.json';
+        $userIDMD5 = md5($userID);
+        $tempUserDataKey = '.temp/messages/user/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
         $tempUserDataValue = $app->data->getValue($tempUserDataKey);
         if ($tempUserDataValue !== null) {
             $tempUserData = json_decode($tempUserDataValue, true);
@@ -121,8 +123,10 @@ class Messages
         $userData = $this->getUserData($userID);
         foreach ($userData['threads'] as $threadData) {
             $threadData = $this->getThreadData($threadData['id']);
-            $lastMessage = end($threadData['messages']);
-            $tempUserData['threadsData'][$threadData['id']] = $lastMessage !== false ? [$lastMessage['id'], $lastMessage['dateCreated']] : [null, null];
+            if (is_array($threadData)) {
+                $lastMessage = end($threadData['messages']);
+                $tempUserData['threadsData'][$threadData['id']] = $lastMessage !== false ? [$lastMessage['id'], $lastMessage['dateCreated']] : [null, null];
+            }
         }
         $this->setTempUserData($userID, $tempUserData);
 
@@ -132,7 +136,8 @@ class Messages
     private function setTempUserData($userID, $data)
     {
         $app = App::get();
-        $tempUserDataKey = '.temp/messages/user/' . md5($userID) . '.json';
+        $userIDMD5 = md5($userID);
+        $tempUserDataKey = '.temp/messages/user/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
         $dataItem = $app->data->make($tempUserDataKey, json_encode($data));
         $app->data->set($dataItem);
     }
@@ -140,7 +145,8 @@ class Messages
     private function getUserData($userID)
     {
         $app = App::get();
-        $userDataKey = 'messages/user/' . md5($userID) . '.json';
+        $userIDMD5 = md5($userID);
+        $userDataKey = 'messages/user/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
         $userDataValue = $app->data->getValue($userDataKey);
         if ($userDataValue !== null) {
             $userData = json_decode($userDataValue, true);
@@ -155,7 +161,8 @@ class Messages
     private function setUserData($userID, $data)
     {
         $app = App::get();
-        $userDataKey = 'messages/user/' . md5($userID) . '.json';
+        $userIDMD5 = md5($userID);
+        $userDataKey = 'messages/user/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
         $dataItem = $app->data->make($userDataKey, json_encode($data));
         $app->data->set($dataItem);
     }
@@ -163,7 +170,8 @@ class Messages
     private function getThreadData($threadID)
     {
         $app = App::get();
-        $threadDataKey = 'messages/thread/' . md5($threadID) . '.json';
+        $threadIDMD5 = md5($threadID);
+        $threadDataKey = 'messages/thread/' . substr($threadIDMD5, 0, 2) . '/' . substr($threadIDMD5, 2, 2) . '/' . $threadIDMD5 . '.json';
         $threadDataValue = $app->data->getValue($threadDataKey);
         if ($threadDataValue !== null) {
             $threadData = json_decode($threadDataValue, true);
@@ -178,7 +186,8 @@ class Messages
     private function setThreadData($threadID, $data)
     {
         $app = App::get();
-        $threadDataKey = 'messages/thread/' . md5($threadID) . '.json';
+        $threadIDMD5 = md5($threadID);
+        $threadDataKey = 'messages/thread/' . substr($threadIDMD5, 0, 2) . '/' . substr($threadIDMD5, 2, 2) . '/' . $threadIDMD5 . '.json';
         $dataItem = $app->data->make($threadDataKey, json_encode($data));
         $app->data->set($dataItem);
     }
