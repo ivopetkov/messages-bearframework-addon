@@ -18,28 +18,53 @@ use IvoPetkov\BearFrameworkAddons\Messages\UserThread;
 class Messages
 {
 
+    static private $cache = [];
+
     public function getUsersThreadsList(array $usersIDs): \IvoPetkov\DataList
     {
         $usersIDs = array_unique($usersIDs);
-        return new \IvoPetkov\DataList(function() use ($usersIDs) {
-            $tempTesult = [];
-            $lastUpdatedDates = [];
+        return new \IvoPetkov\DataList(function(\IvoPetkov\DataListContext $context) use ($usersIDs) {
+            $statusFilter = null;
+            foreach ($context->filterByProperties as $index => $filterByProperty) {
+                if ($filterByProperty->property === 'status' && $filterByProperty->operator === 'equal') {
+                    if ($filterByProperty->value === 'read') {
+                        $statusFilter = 'read';
+                    } elseif ($filterByProperty->value === 'unread') {
+                        $statusFilter = 'unread';
+                    }
+                    $filterByProperty->applied = true;
+                }
+            }
+            $threadsLastUpdatedDates = [];
             foreach ($usersIDs as $userID) {
                 $userData = $this->getUserData($userID);
                 if (is_array($userData)) {
-                    $tempUserData = $this->getTempUserData($userID);
-                    foreach ($userData['threads'] as $threadData) {
-                        $threadID = $threadData['id'];
-                        $lastUpdateDate = isset($tempUserData['threadsData'][$threadID]) ? $tempUserData['threadsData'][$threadID][1] : null;
-                        $lastUpdatedDates[] = $lastUpdateDate;
-                        $tempTesult[] = $this->getUserThread($userID, $threadID);
+                    $userThreadsListData = $this->getUserThreadsListData($userID, true, $userData);
+                    foreach ($userData['threads'] as $userThreadData) {
+                        $threadID = $userThreadData['id'];
+                        if (!isset($userThreadsListData['threads'][$threadID])) {
+                            throw new \Exception('Should not get here');
+                        }
+                        $add = true;
+                        if ($statusFilter !== null) {
+                            $read = false;
+                            if (isset($userThreadData['lastReadMessageID'])) {
+                                $read = $userThreadData['lastReadMessageID'] === $userThreadsListData['threads'][$threadID][0];
+                            }
+                            $add = ($statusFilter === 'read' && $read) || ($statusFilter === 'unread' && !$read);
+                        }
+                        if ($add) {
+                            $threadsLastUpdatedDates[$threadID] = $userThreadsListData['threads'][$threadID][1];
+                        }
                     }
                 }
             }
-            arsort($lastUpdatedDates);
+            arsort($threadsLastUpdatedDates);
             $result = [];
-            foreach ($lastUpdatedDates as $index => $lastUpdateDate) {
-                $result[] = $tempTesult[$index];
+            foreach ($threadsLastUpdatedDates as $threadID => $lastUpdateDate) {
+                $result[] = function() use ($userID, $threadID) {
+                    return $this->getUserThread($userID, $threadID);
+                };
             }
             return $result;
         });
@@ -68,11 +93,11 @@ class Messages
         $read = true;
         $userData = $this->getUserData($userID);
         if (is_array($userData)) {
-            $tempUserData = $this->getTempUserData($userID);
+            $userThreadsListData = $this->getUserThreadsListData($userID);
             foreach ($userData['threads'] as $threadData) {
                 if ($threadData['id'] === $threadID) {
-                    if (isset($threadData['lastReadMessageID'], $tempUserData['threadsData'][$threadID])) {
-                        $read = $threadData['lastReadMessageID'] === $tempUserData['threadsData'][$threadID][0];
+                    if (isset($threadData['lastReadMessageID'], $userThreadsListData['threads'][$threadID])) {
+                        $read = $threadData['lastReadMessageID'] === $userThreadsListData['threads'][$threadID][0];
                         break;
                     } else {
                         $read = false;
@@ -104,58 +129,115 @@ class Messages
         }
     }
 
-    private function getTempUserData($userID)
+    /**
+     * Returns array containing [threadID=>[lastMessageID, lastMessageDate, otherUsersIDs, lastReadMessageID]]
+     * @param string $userID
+     * @param bool $updateMissing
+     * @param array $userData
+     * @return type
+     * @throws \Exception
+     */
+    private function getUserThreadsListData($userID, $updateMissing = true, $userData = null)
     {
         $app = App::get();
         $userIDMD5 = md5($userID);
-        $tempUserDataKey = '.temp/messages/user/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
-        $tempUserDataValue = $app->data->getValue($tempUserDataKey);
-        if ($tempUserDataValue !== null) {
-            $tempUserData = json_decode($tempUserDataValue, true);
-            if (is_array($tempUserData) && isset($tempUserData['id']) && $tempUserData['id'] === $userID) {
-                return $tempUserData;
+        $cacheKey = 'userThreadsListData-' . $userID;
+        if (isset(self::$cache[$cacheKey])) {
+            $tempData = self::$cache[$cacheKey];
+        } else {
+            $tempUserThreadsListDataKey = '.temp/messages/userthreads/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
+            $tempData = [];
+            $tempDataValue = $app->data->getValue($tempUserThreadsListDataKey);
+            if ($tempDataValue !== null) {
+                $_tempData = json_decode(gzuncompress($tempDataValue), true);
+                if (is_array($_tempData) && isset($_tempData['id']) && $_tempData['id'] === $userID) {
+                    $tempData = $_tempData;
+                }
+            }
+            self::$cache[$cacheKey] = $tempData;
+        }
+        if (!isset($tempData['id'])) {
+            $tempData['id'] = $userID;
+        }
+        if (!isset($tempData['threads'])) {
+            $tempData['threads'] = [];
+        }
+        if ($userData === null) {
+            $userData = $this->getUserData($userID);
+        }
+        if (!is_array($userData)) {
+            throw new \Exception('Invalid user data (' . $userID . ')');
+        }
+
+        $result = [
+            'id' => $userID,
+            'threads' => []
+        ];
+        foreach ($userData['threads'] as $userThreadData) {
+            $threadID = $userThreadData['id'];
+            if (isset($tempData['threads'][$threadID])) {
+                $result['threads'][$threadID] = $tempData['threads'][$threadID];
+            } else {
+                if ($updateMissing) {
+                    $threadData = $this->getThreadData($threadID);
+                    $otherUsersIDs = [];
+                    if (is_array($threadData)) {
+                        $otherUsersIDs = array_values(array_diff($threadData['usersIDs'], [$userID]));
+                        $lastMessage = end($threadData['messages']);
+                        if ($lastMessage !== false) {
+                            $tempData['threads'][$threadID] = [
+                                $lastMessage['id'], // last message id
+                                $lastMessage['dateCreated'], // last message date
+                                $otherUsersIDs // other users ids
+                            ];
+                        }
+                    }
+                    if (!isset($tempData['threads'][$threadID])) {
+                        $tempData['threads'][$threadID] = [
+                            null, // last message id
+                            0, // last message date
+                            $otherUsersIDs // other users ids
+                        ];
+                    }
+                    $this->setUserThreadsListData($userID, $tempData);
+                    $result['threads'][$threadID] = $tempData['threads'][$threadID];
+                }
             }
         }
-        $tempUserData = [];
-        $tempUserData['id'] = $userID;
-        $tempUserData['threadsData'] = [];
-
-        $userData = $this->getUserData($userID);
-        foreach ($userData['threads'] as $threadData) {
-            $threadData = $this->getThreadData($threadData['id']);
-            if (is_array($threadData)) {
-                $lastMessage = end($threadData['messages']);
-                $tempUserData['threadsData'][$threadData['id']] = $lastMessage !== false ? [$lastMessage['id'], $lastMessage['dateCreated']] : [null, null];
-            }
-        }
-        $this->setTempUserData($userID, $tempUserData);
-
-        return $tempUserData;
+        return $result;
     }
 
-    private function setTempUserData($userID, $data)
+    private function setUserThreadsListData($userID, $data)
     {
         $app = App::get();
         $userIDMD5 = md5($userID);
-        $tempUserDataKey = '.temp/messages/user/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
-        $dataItem = $app->data->make($tempUserDataKey, json_encode($data));
-        $app->data->set($dataItem);
+        $tempUserThreadsListDataKey = '.temp/messages/userthreads/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
+        $app->data->set($app->data->make($tempUserThreadsListDataKey, gzcompress(json_encode($data))));
+        $cacheKey = 'userThreadsListData-' . $userID;
+        self::$cache[$cacheKey] = $data;
     }
 
     private function getUserData($userID)
     {
-        $app = App::get();
-        $userIDMD5 = md5($userID);
-        $userDataKey = 'messages/user/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
-        $userDataValue = $app->data->getValue($userDataKey);
-        if ($userDataValue !== null) {
-            $userData = json_decode($userDataValue, true);
-            if (is_array($userData) && isset($userData['id']) && $userData['id'] === $userID) {
-                return $userData;
+        $cacheKey = 'userData-' . $userID;
+        if (isset(self::$cache[$cacheKey]) || array_key_exists($cacheKey, self::$cache)) { // the second check handles the null value
+            return self::$cache[$cacheKey];
+        } else {
+            $app = App::get();
+            $userIDMD5 = md5($userID);
+            $userDataKey = 'messages/user/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
+            $userDataValue = $app->data->getValue($userDataKey);
+            if ($userDataValue !== null) {
+                $userData = json_decode($userDataValue, true);
+                if (is_array($userData) && isset($userData['id']) && $userData['id'] === $userID) {
+                    self::$cache[$cacheKey] = $userData;
+                    return $userData;
+                }
+                throw new \Exception('Corrupted data for user ' . $userID);
             }
-            throw new \Exception('Corrupted data for user ' . $userID);
+            self::$cache[$cacheKey] = null;
+            return null;
         }
-        return null;
     }
 
     private function setUserData($userID, $data)
@@ -165,22 +247,31 @@ class Messages
         $userDataKey = 'messages/user/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
         $dataItem = $app->data->make($userDataKey, json_encode($data));
         $app->data->set($dataItem);
+        $cacheKey = 'userData-' . $userID;
+        self::$cache[$cacheKey] = $data;
     }
 
     private function getThreadData($threadID)
     {
-        $app = App::get();
-        $threadIDMD5 = md5($threadID);
-        $threadDataKey = 'messages/thread/' . substr($threadIDMD5, 0, 2) . '/' . substr($threadIDMD5, 2, 2) . '/' . $threadIDMD5 . '.json';
-        $threadDataValue = $app->data->getValue($threadDataKey);
-        if ($threadDataValue !== null) {
-            $threadData = json_decode($threadDataValue, true);
-            if (is_array($threadData) && isset($threadData['id']) && $threadData['id'] === $threadID) {
-                return $threadData;
+        $cacheKey = 'threadData-' . $threadID;
+        if (isset(self::$cache[$cacheKey]) || array_key_exists($cacheKey, self::$cache)) { // the second check handles the null value
+            return self::$cache[$cacheKey];
+        } else {
+            $app = App::get();
+            $threadIDMD5 = md5($threadID);
+            $threadDataKey = 'messages/thread/' . substr($threadIDMD5, 0, 2) . '/' . substr($threadIDMD5, 2, 2) . '/' . $threadIDMD5 . '.json';
+            $threadDataValue = $app->data->getValue($threadDataKey);
+            if ($threadDataValue !== null) {
+                $threadData = json_decode($threadDataValue, true);
+                if (is_array($threadData) && isset($threadData['id']) && $threadData['id'] === $threadID) {
+                    self::$cache[$cacheKey] = $threadData;
+                    return $threadData;
+                }
+                throw new \Exception('Corrupted data for thread ' . $threadID);
             }
-            throw new \Exception('Corrupted data for thread ' . $threadID);
+            self::$cache[$cacheKey] = null;
+            return null;
         }
-        return null;
     }
 
     private function setThreadData($threadID, $data)
@@ -190,9 +281,11 @@ class Messages
         $threadDataKey = 'messages/thread/' . substr($threadIDMD5, 0, 2) . '/' . substr($threadIDMD5, 2, 2) . '/' . $threadIDMD5 . '.json';
         $dataItem = $app->data->make($threadDataKey, json_encode($data));
         $app->data->set($dataItem);
+        $cacheKey = 'threadData-' . $threadID;
+        self::$cache[$cacheKey] = $data;
     }
 
-    public function createThread(array $usersIDs): string
+    public function getThreadID(array $usersIDs): string // was createThread
     {
         if (empty($usersIDs)) {
             throw new \Exception('usersIDs cannot be empty');
@@ -211,11 +304,14 @@ class Messages
         $firstUserID = $usersIDs[0];
         $usersIDsAsJSON = json_encode($usersIDs);
         $firstUserData = $getUserData($firstUserID);
-        foreach ($firstUserData['threads'] as $threadData) {
-            $threadID = $threadData['id'];
-            $threadData = $this->getThreadData($threadID);
-            if (is_array($threadData) && isset($threadData['usersIDs'])) {
-                if ($usersIDsAsJSON === json_encode($threadData['usersIDs'])) {
+        $userThreadsListData = $this->getUserThreadsListData($firstUserID, true, $firstUserData);
+        if (isset($userThreadsListData['threads'])) {
+            foreach ($userThreadsListData['threads'] as $threadID => $userThreadListData) {
+                $threadUserIDs = $userThreadListData[2];
+                $threadUserIDs[] = $firstUserID;
+                $threadUserIDs = array_values($threadUserIDs);
+                sort($threadUserIDs);
+                if ($usersIDsAsJSON === json_encode($threadUserIDs)) {
                     return $threadID;
                 }
             }
@@ -250,27 +346,31 @@ class Messages
         }
         $messageID = md5(uniqid());
         $messageTime = time();
-        $messageMicrotime = microtime(true);
         $threadData['messages'][] = [
             'id' => $messageID,
             'userID' => $userID,
             'dateCreated' => $messageTime,
             'text' => $text
         ];
+        $this->setThreadData($threadID, $threadData);
         $userData = $this->getUserData($userID);
         if (is_array($userData)) {
-            foreach ($userData['threads'] as $i => $_threadData) {
-                if ($_threadData['id'] === $threadID) {
+            foreach ($userData['threads'] as $i => $userThreadData) {
+                if ($userThreadData['id'] === $threadID) {
                     $userData['threads'][$i]['lastReadMessageID'] = $messageID;
                 }
             }
             $this->setUserData($userID, $userData);
         }
-        $this->setThreadData($threadID, $threadData);
-        foreach ($threadData['usersIDs'] as $userID) {
-            $tempUserData = $this->getTempUserData($userID);
-            $tempUserData['threadsData'][$threadID] = [$messageID, $messageMicrotime];
-            $this->setTempUserData($userID, $tempUserData);
+
+        foreach ($threadData['usersIDs'] as $otherUserID) {
+            $tempUserThreadsListData = $this->getUserThreadsListData($otherUserID, false, $userID === $otherUserID ? $userData : null);
+            $tempUserThreadsListData['threads'][$threadID] = [
+                $messageID, // last message id
+                $messageTime, // last message time
+                array_values(array_diff($threadData['usersIDs'], [$otherUserID])) // other users ids
+            ];
+            $this->setUserThreadsListData($otherUserID, $tempUserThreadsListData);
         }
     }
 
