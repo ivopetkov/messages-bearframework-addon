@@ -32,7 +32,9 @@ class Messages
                     } elseif ($filterByProperty->value === 'unread') {
                         $statusFilter = 'unread';
                     }
-                    $filterByProperty->applied = true;
+                    if ($statusFilter !== null) {
+                        $filterByProperty->applied = true;
+                    }
                 }
             }
             $threadsLastUpdatedDates = [];
