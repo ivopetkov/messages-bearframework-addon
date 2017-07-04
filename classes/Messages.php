@@ -11,6 +11,7 @@ namespace IvoPetkov\BearFrameworkAddons;
 
 use BearFramework\App;
 use IvoPetkov\BearFrameworkAddons\Messages\UserThread;
+use IvoPetkov\Lock;
 
 /**
  * Messages
@@ -117,6 +118,7 @@ class Messages
         if (is_array($threadData)) {
             $lastMessage = end($threadData['messages']);
             if ($lastMessage !== false) {
+                $this->lockUserData($userID);
                 $userData = $this->getUserData($userID);
                 if (is_array($userData)) {
                     foreach ($userData['threads'] as $i => $threadData) {
@@ -127,6 +129,7 @@ class Messages
                     }
                     $this->setUserData($userID, $userData);
                 }
+                $this->unlockUserData($userID);
             }
         }
     }
@@ -151,7 +154,11 @@ class Messages
             $tempData = [];
             $tempDataValue = $app->data->getValue($tempUserThreadsListDataKey);
             if ($tempDataValue !== null) {
-                $_tempData = json_decode(gzuncompress($tempDataValue), true);
+                try {
+                    $_tempData = json_decode(gzuncompress($tempDataValue), true);
+                } catch (\Exception $e) {
+                    $_tempData = null;
+                }
                 if (is_array($_tempData) && isset($_tempData['id']) && $_tempData['id'] === $userID) {
                     $tempData = $_tempData;
                 }
@@ -302,9 +309,10 @@ class Messages
             return $data;
         };
         $usersIDs = array_values($usersIDs);
-        sort($usersIDs);
         $firstUserID = $usersIDs[0];
+        sort($usersIDs);
         $usersIDsAsJSON = json_encode($usersIDs);
+        $this->lockUserData($firstUserID);
         $firstUserData = $getUserData($firstUserID);
         $userThreadsListData = $this->getUserThreadsListData($firstUserID, true, $firstUserData);
         if (isset($userThreadsListData['threads'])) {
@@ -314,6 +322,7 @@ class Messages
                 $threadUserIDs = array_values($threadUserIDs);
                 sort($threadUserIDs);
                 if ($usersIDsAsJSON === json_encode($threadUserIDs)) {
+                    $this->unlockUserData($firstUserID);
                     return $threadID;
                 }
             }
@@ -322,28 +331,38 @@ class Messages
         if ($this->getThreadData($threadID) !== null) {
             throw new \Exception('Thread ID collision');
         }
+        $this->lockThreadData($threadID);
         $threadData = [
             'id' => $threadID,
             'usersIDs' => $usersIDs,
             'messages' => []
         ];
         $this->setThreadData($threadID, $threadData);
+        $this->unlockThreadData($threadID);
         foreach ($usersIDs as $userID) {
             if ($userID === $firstUserID) {
                 $userData = $firstUserData;
             } else {
+                $this->lockUserData($userID);
                 $userData = $getUserData($userID);
             }
             $userData['threads'][] = ['id' => $threadID];
             $this->setUserData($userID, $userData);
+            if ($userID === $firstUserID) {
+                $this->unlockUserData($firstUserID);
+            } else {
+                $this->unlockUserData($userID);
+            }
         }
         return $threadID;
     }
 
     public function add(string $threadID, string $userID, string $text)
     {
+        $this->lockThreadData($threadID);
         $threadData = $this->getThreadData($threadID);
         if ($threadData === null) {
+            $this->unlockThreadData($threadID);
             throw new \Exception('Invalid thread ' . $threadID);
         }
         $messageID = md5(uniqid());
@@ -355,6 +374,8 @@ class Messages
             'text' => $text
         ];
         $this->setThreadData($threadID, $threadData);
+        $this->unlockThreadData($threadID);
+        $this->lockUserData($userID);
         $userData = $this->getUserData($userID);
         if (is_array($userData)) {
             foreach ($userData['threads'] as $i => $userThreadData) {
@@ -364,6 +385,7 @@ class Messages
             }
             $this->setUserData($userID, $userData);
         }
+        $this->unlockUserData($userID);
 
         foreach ($threadData['usersIDs'] as $otherUserID) {
             $tempUserThreadsListData = $this->getUserThreadsListData($otherUserID, false, $userID === $otherUserID ? $userData : null);
@@ -374,6 +396,26 @@ class Messages
             ];
             $this->setUserThreadsListData($otherUserID, $tempUserThreadsListData);
         }
+    }
+
+    private function lockThreadData($threadID)
+    {
+        Lock::acquire('messages.thread.' . md5($threadID));
+    }
+
+    private function unlockThreadData($threadID)
+    {
+        Lock::release('messages.thread.' . md5($threadID));
+    }
+
+    private function lockUserData($userID)
+    {
+        Lock::acquire('messages.user.' . md5($userID));
+    }
+
+    private function unlockUserData($userID)
+    {
+        Lock::release('messages.user.' . md5($userID));
     }
 
 }
