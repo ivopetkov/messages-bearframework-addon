@@ -280,7 +280,11 @@ class Messages
         $app = App::get();
         $userIDMD5 = md5($userID);
         $tempUserThreadsListDataKey = '.temp/messages/userthreads/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
-        $app->data->set($app->data->make($tempUserThreadsListDataKey, gzcompress(json_encode($data))));
+        if (empty($data['threads'])) {
+            $app->data->delete($tempUserThreadsListDataKey);
+        } else {
+            $app->data->set($app->data->make($tempUserThreadsListDataKey, gzcompress(json_encode($data))));
+        }
         $cacheKey = 'userThreadsListData-' . $userID;
         self::$cache[$cacheKey] = $data;
     }
@@ -313,8 +317,11 @@ class Messages
         $app = App::get();
         $userIDMD5 = md5($userID);
         $userDataKey = 'messages/user/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
-        $dataItem = $app->data->make($userDataKey, json_encode($data));
-        $app->data->set($dataItem);
+        if (empty($data['threads'])) {
+            $app->data->delete($userDataKey);
+        } else {
+            $app->data->set($app->data->make($userDataKey, json_encode($data)));
+        }
         $cacheKey = 'userData-' . $userID;
         self::$cache[$cacheKey] = $data;
     }
