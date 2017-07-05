@@ -173,14 +173,20 @@ class Messages
             if ($lastMessage !== false) {
                 $this->lockUserData($userID);
                 $userData = $this->getUserData($userID);
+                $hasChange = false;
                 if (is_array($userData)) {
                     foreach ($userData['threads'] as $i => $threadData) {
                         if ($threadData['id'] === $threadID) {
-                            $userData['threads'][$i]['lastReadMessageID'] = $lastMessage['id'];
+                            if ($userData['threads'][$i]['lastReadMessageID'] !== $lastMessage['id']) {
+                                $userData['threads'][$i]['lastReadMessageID'] = $lastMessage['id'];
+                                $hasChange = true;
+                            }
                             break;
                         }
                     }
-                    $this->setUserData($userID, $userData);
+                    if ($hasChange) {
+                        $this->setUserData($userID, $userData);
+                    }
                 }
                 $this->unlockUserData($userID);
             }
