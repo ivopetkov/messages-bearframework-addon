@@ -112,6 +112,59 @@ class Messages
         return $userThread;
     }
 
+    private function removeThreadFromUserThreadsListData($userID, $threadID, $userData = null)
+    {
+        $tempUserThreadsListData = $this->getUserThreadsListData($userID, false, $userData);
+        if (isset($tempUserThreadsListData['threads'][$threadID])) {
+            unset($tempUserThreadsListData['threads'][$threadID]);
+            $this->setUserThreadsListData($userID, $tempUserThreadsListData);
+        }
+    }
+
+    public function deleteUserThread(string $userID, string $threadID)
+    {
+        $this->lockUserData($userID);
+        $this->lockThreadData($threadID);
+        $userData = $this->getUserData($userID);
+        if (is_array($userData)) {
+            $hasUserDataChange = false;
+            foreach ($userData['threads'] as $i => $threadData) {
+                if ($threadData['id'] === $threadID) {
+                    unset($userData['threads'][$i]);
+                    $hasUserDataChange = true;
+                    break;
+                }
+            }
+            if ($hasUserDataChange) {
+                $this->setUserData($userID, $userData);
+            }
+            $this->removeThreadFromUserThreadsListData($userID, $threadID, $userData);
+            $threadData = $this->getThreadData($threadID);
+            if (is_array($threadData)) {
+                $userIDIndex = array_search($userID, $threadData['usersIDs']);
+                if ($userIDIndex !== false) {
+                    unset($threadData['usersIDs'][$userIDIndex]);
+                    if (empty($threadData['usersIDs'])) {
+                        $this->deleteThreadData($threadID);
+                    } else {
+                        $threadData['usersIDs'] = array_values($threadData['usersIDs']);
+                        foreach ($threadData['messages'] as $i => $message) {
+                            if ($message['userID'] === $userID) {
+                                $threadData['messages'][$i]['userID'] = null;
+                            }
+                        }
+                        foreach ($threadData['usersIDs'] as $otherUserID) {
+                            $this->removeThreadFromUserThreadsListData($otherUserID, $threadID);
+                        }
+                        $this->setThreadData($threadID, $threadData);
+                    }
+                }
+            }
+        }
+        $this->unlockThreadData($threadID);
+        $this->unlockUserData($userID);
+    }
+
     public function markUserThreadAsRead(string $userID, string $threadID)
     {
         $threadData = $this->getThreadData($threadID);
@@ -283,6 +336,19 @@ class Messages
         }
     }
 
+    private function deleteThreadData($threadID)
+    {
+        $cacheKey = 'threadData-' . $threadID;
+        if (array_key_exists($cacheKey, self::$cache)) {
+            unset(self::$cache[$cacheKey]);
+        }
+        $app = App::get();
+        $threadIDMD5 = md5($threadID);
+        $threadDataKey = 'messages/thread/' . substr($threadIDMD5, 0, 2) . '/' . substr($threadIDMD5, 2, 2) . '/' . $threadIDMD5 . '.json';
+        $newThreadDataKey = '.recyclebin/messages/thread/' . substr($threadIDMD5, 0, 2) . '/' . substr($threadIDMD5, 2, 2) . '/' . $threadIDMD5 . '.json';
+        $app->data->rename($threadDataKey, $newThreadDataKey);
+    }
+
     private function setThreadData($threadID, $data)
     {
         $app = App::get();
@@ -294,7 +360,7 @@ class Messages
         self::$cache[$cacheKey] = $data;
     }
 
-    public function getThreadID(array $usersIDs): string // was createThread
+    public function getThreadID(array $usersIDs, $createIfMissing = true): string // was createThread
     {
         if (empty($usersIDs)) {
             throw new \Exception('usersIDs cannot be empty');
@@ -308,11 +374,13 @@ class Messages
             }
             return $data;
         };
-        $usersIDs = array_values($usersIDs);
+        $usersIDs = array_values(array_unique($usersIDs));
         $firstUserID = $usersIDs[0];
         sort($usersIDs);
         $usersIDsAsJSON = json_encode($usersIDs);
-        $this->lockUserData($firstUserID);
+        if ($createIfMissing) {
+            $this->lockUserData($firstUserID);
+        }
         $firstUserData = $getUserData($firstUserID);
         $userThreadsListData = $this->getUserThreadsListData($firstUserID, true, $firstUserData);
         if (isset($userThreadsListData['threads'])) {
@@ -322,10 +390,15 @@ class Messages
                 $threadUserIDs = array_values($threadUserIDs);
                 sort($threadUserIDs);
                 if ($usersIDsAsJSON === json_encode($threadUserIDs)) {
-                    $this->unlockUserData($firstUserID);
+                    if ($createIfMissing) {
+                        $this->unlockUserData($firstUserID);
+                    }
                     return $threadID;
                 }
             }
+        }
+        if (!$createIfMissing) {
+            return null;
         }
         $threadID = md5(uniqid() . $usersIDsAsJSON);
         if ($this->getThreadData($threadID) !== null) {
@@ -348,13 +421,22 @@ class Messages
             }
             $userData['threads'][] = ['id' => $threadID];
             $this->setUserData($userID, $userData);
-            if ($userID === $firstUserID) {
-                $this->unlockUserData($firstUserID);
-            } else {
-                $this->unlockUserData($userID);
-            }
+            $this->unlockUserData($userID);
         }
         return $threadID;
+    }
+
+    public function isUserThread(string $userID, string $threadID)
+    {
+        $userData = $this->getUserData($userID);
+        if (is_array($userData)) {
+            foreach ($userData['threads'] as $i => $userThreadData) {
+                if ($userThreadData['id'] === $threadID) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public function add(string $threadID, string $userID, string $text)
@@ -364,6 +446,10 @@ class Messages
         if ($threadData === null) {
             $this->unlockThreadData($threadID);
             throw new \Exception('Invalid thread ' . $threadID);
+        }
+        if (array_search($userID, $threadData['usersIDs']) === false) {
+            $this->unlockThreadData($threadID);
+            throw new \Exception('Invalid thread user ' . $threadID . ', ' . $userID);
         }
         $messageID = md5(uniqid());
         $messageTime = time();
