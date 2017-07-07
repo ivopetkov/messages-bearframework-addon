@@ -50,10 +50,8 @@ class Messages
                         }
                         $add = true;
                         if ($statusFilter !== null) {
-                            $read = false;
-                            if (isset($userThreadData['lastReadMessageID'])) {
-                                $read = $userThreadData['lastReadMessageID'] === $userThreadsListData['threads'][$threadID][0];
-                            }
+                            $lastReadMessageID = isset($userThreadData['lastReadMessageID']) ? (string) $userThreadData['lastReadMessageID'] : '';
+                            $read = $lastReadMessageID === (string) $userThreadsListData['threads'][$threadID][0];
                             $add = ($statusFilter === 'read' && $read) || ($statusFilter === 'unread' && !$read);
                         }
                         if ($add) {
@@ -99,8 +97,8 @@ class Messages
             $userThreadsListData = $this->getUserThreadsListData($userID);
             foreach ($userData['threads'] as $threadData) {
                 if ($threadData['id'] === $threadID) {
-                    if (isset($threadData['lastReadMessageID'], $userThreadsListData['threads'][$threadID])) {
-                        $read = $threadData['lastReadMessageID'] === $userThreadsListData['threads'][$threadID][0];
+                    if (isset($userThreadsListData['threads'][$threadID])) {
+                        $read = (isset($threadData['lastReadMessageID']) ? (string) $threadData['lastReadMessageID'] : '') === (string) $userThreadsListData['threads'][$threadID][0];
                         break;
                     } else {
                         $read = false;
@@ -170,26 +168,25 @@ class Messages
         $threadData = $this->getThreadData($threadID);
         if (is_array($threadData)) {
             $lastMessage = end($threadData['messages']);
-            if ($lastMessage !== false) {
-                $this->lockUserData($userID);
-                $userData = $this->getUserData($userID);
-                $hasChange = false;
-                if (is_array($userData)) {
-                    foreach ($userData['threads'] as $i => $threadData) {
-                        if ($threadData['id'] === $threadID) {
-                            if ($userData['threads'][$i]['lastReadMessageID'] !== $lastMessage['id']) {
-                                $userData['threads'][$i]['lastReadMessageID'] = $lastMessage['id'];
-                                $hasChange = true;
-                            }
-                            break;
+            $this->lockUserData($userID);
+            $userData = $this->getUserData($userID);
+            $hasChange = false;
+            if (is_array($userData)) {
+                foreach ($userData['threads'] as $i => $threadData) {
+                    if ($threadData['id'] === $threadID) {
+                        $lastMessageID = $lastMessage !== false ? (string) $lastMessage['id'] : '';
+                        if (!isset($userData['threads'][$i]['lastReadMessageID']) || (string) $userData['threads'][$i]['lastReadMessageID'] !== $lastMessageID) {
+                            $userData['threads'][$i]['lastReadMessageID'] = $lastMessageID;
+                            $hasChange = true;
                         }
-                    }
-                    if ($hasChange) {
-                        $this->setUserData($userID, $userData);
+                        break;
                     }
                 }
-                $this->unlockUserData($userID);
+                if ($hasChange) {
+                    $this->setUserData($userID, $userData);
+                }
             }
+            $this->unlockUserData($userID);
         }
     }
 
@@ -262,8 +259,8 @@ class Messages
                     }
                     if (!isset($tempData['threads'][$threadID])) {
                         $tempData['threads'][$threadID] = [
-                            null, // last message id
-                            0, // last message date
+                            '', // last message id
+                            (isset($threadData['dateCreated']) ? $threadData['dateCreated'] : 0), // last message date
                             $otherUsersIDs // other users ids
                         ];
                     }
@@ -421,6 +418,7 @@ class Messages
         $threadData = [
             'id' => $threadID,
             'usersIDs' => $usersIDs,
+            'dateCreated' => time(),
             'messages' => []
         ];
         $this->setThreadData($threadID, $threadData);
