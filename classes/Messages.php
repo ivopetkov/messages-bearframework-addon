@@ -452,6 +452,8 @@ class Messages
 
     public function add(string $threadID, string $userID, string $text)
     {
+        $app = App::get();
+        $app->hooks->execute('messageAdd', $threadID, $userID, $text);
         $this->lockThreadData($threadID);
         $threadData = $this->getThreadData($threadID);
         if ($threadData === null) {
@@ -492,6 +494,12 @@ class Messages
                 array_values(array_diff($threadData['usersIDs'], [$otherUserID])) // other users ids
             ];
             $this->setUserThreadsListData($otherUserID, $tempUserThreadsListData);
+        }
+        $app->hooks->execute('messageAdded', $threadID, $userID, $text);
+        foreach ($threadData['usersIDs'] as $otherUserID) {
+            if ($userID !== $otherUserID) {
+                $app->hooks->execute('messageReceived', $otherUserID, $threadID, $userID, $text);
+            }
         }
     }
 
