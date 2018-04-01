@@ -51,19 +51,20 @@ class Messages
                             throw new \Exception('Should not get here');
                         }
                         $add = true;
-                        $lastThreadMessageID = (string) $userThreadsListData['threads'][$threadID][0];
-                        if (strlen($lastThreadMessageID) === 0 && !$includeEmptyThreads) {
+                        $lastMessageID = (string) $userThreadsListData['threads'][$threadID][0];
+                        $lastUpdateDate = $userThreadsListData['threads'][$threadID][1];
+                        if (strlen($lastMessageID) === 0 && !$includeEmptyThreads) {
                             $add = false;
                         }
                         if ($add) {
                             if ($statusFilter !== null) {
                                 $lastReadMessageID = isset($userThreadData['lastReadMessageID']) ? (string) $userThreadData['lastReadMessageID'] : '';
-                                $read = $lastReadMessageID === $lastThreadMessageID;
+                                $read = $lastReadMessageID === $lastMessageID;
                                 $add = ($statusFilter === 'read' && $read) || ($statusFilter === 'unread' && !$read);
                             }
                         }
                         if ($add) {
-                            $threadsLastUpdatedDates[$threadID] = $userThreadsListData['threads'][$threadID][1];
+                            $threadsLastUpdatedDates[$threadID] = $lastUpdateDate;
                             $threadsUsers[$threadID] = $userID;
                         }
                     }
@@ -108,7 +109,9 @@ class Messages
             foreach ($userData['threads'] as $threadData) {
                 if ($threadData['id'] === $threadID) {
                     if (isset($userThreadsListData['threads'][$threadID])) {
-                        $read = (isset($threadData['lastReadMessageID']) ? (string) $threadData['lastReadMessageID'] : '') === (string) $userThreadsListData['threads'][$threadID][0];
+                        $lastMessageID = (string) $userThreadsListData['threads'][$threadID][0];
+                        $userThread->lastUpdateDate = $userThreadsListData['threads'][$threadID][1];
+                        $read = (isset($threadData['lastReadMessageID']) ? (string) $threadData['lastReadMessageID'] : '') === $lastMessageID;
                         break;
                     } else {
                         $read = false;
