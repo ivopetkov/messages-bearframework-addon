@@ -39,6 +39,7 @@ class Messages
                 }
             }
             $threadsLastUpdatedDates = [];
+            $threadsUsers = [];
             foreach ($usersIDs as $userID) {
                 $userData = $this->getUserData($userID);
                 if (is_array($userData)) {
@@ -56,6 +57,7 @@ class Messages
                         }
                         if ($add) {
                             $threadsLastUpdatedDates[$threadID] = $userThreadsListData['threads'][$threadID][1];
+                            $threadsUsers[$threadID] = $userID;
                         }
                     }
                 }
@@ -63,6 +65,7 @@ class Messages
             arsort($threadsLastUpdatedDates);
             $result = [];
             foreach ($threadsLastUpdatedDates as $threadID => $lastUpdateDate) {
+                $userID = $threadsUsers[$threadID];
                 $result[] = function() use ($userID, $threadID) {
                     return $this->getUserThread($userID, $threadID);
                 };
