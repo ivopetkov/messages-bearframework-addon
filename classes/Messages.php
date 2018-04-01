@@ -21,10 +21,11 @@ class Messages
 
     static private $cache = [];
 
-    public function getUsersThreadsList(array $usersIDs): \IvoPetkov\DataList
+    public function getUsersThreadsList(array $usersIDs, array $options = []): \IvoPetkov\DataList
     {
+        $includeEmptyThreads = isset($options['includeEmptyThreads']) && (int) $options['includeEmptyThreads'] > 0;
         $usersIDs = array_unique($usersIDs);
-        return new \IvoPetkov\DataList(function(\IvoPetkov\DataListContext $context) use ($usersIDs) {
+        return new \IvoPetkov\DataList(function(\IvoPetkov\DataListContext $context) use ($usersIDs, $includeEmptyThreads) {
             $statusFilter = null;
             foreach ($context->filterByProperties as $index => $filterByProperty) {
                 if ($filterByProperty->property === 'status' && $filterByProperty->operator === 'equal') {
@@ -50,10 +51,16 @@ class Messages
                             throw new \Exception('Should not get here');
                         }
                         $add = true;
-                        if ($statusFilter !== null) {
-                            $lastReadMessageID = isset($userThreadData['lastReadMessageID']) ? (string) $userThreadData['lastReadMessageID'] : '';
-                            $read = $lastReadMessageID === (string) $userThreadsListData['threads'][$threadID][0];
-                            $add = ($statusFilter === 'read' && $read) || ($statusFilter === 'unread' && !$read);
+                        $lastThreadMessageID = (string) $userThreadsListData['threads'][$threadID][0];
+                        if (strlen($lastThreadMessageID) === 0 && !$includeEmptyThreads) {
+                            $add = false;
+                        }
+                        if ($add) {
+                            if ($statusFilter !== null) {
+                                $lastReadMessageID = isset($userThreadData['lastReadMessageID']) ? (string) $userThreadData['lastReadMessageID'] : '';
+                                $read = $lastReadMessageID === $lastThreadMessageID;
+                                $add = ($statusFilter === 'read' && $read) || ($statusFilter === 'unread' && !$read);
+                            }
                         }
                         if ($add) {
                             $threadsLastUpdatedDates[$threadID] = $userThreadsListData['threads'][$threadID][1];
