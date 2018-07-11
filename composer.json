@@ -13,8 +13,8 @@
     ],
     "require": {
         "php": ">=7.1",
-        "bearframework/bearframework": "dev-master|0.10.*@beta",
-        "ivopetkov/data-object": ">=0.5.3",
+        "bearframework/bearframework": "0.10.*",
+        "ivopetkov/data-object": "^0.5.3",
         "ivopetkov/lock": "0.2.*"
     },
     "require-dev": {
