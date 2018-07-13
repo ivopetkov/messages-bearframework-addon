@@ -11,7 +11,6 @@ namespace IvoPetkov\BearFrameworkAddons;
 
 use BearFramework\App;
 use IvoPetkov\BearFrameworkAddons\Messages\UserThread;
-use IvoPetkov\Lock;
 
 /**
  * Messages
@@ -518,22 +517,26 @@ class Messages
 
     private function lockThreadData($threadID)
     {
-        Lock::acquire('messages.thread.' . md5($threadID));
+        $app = App::get();
+        $app->locks->acquire('messages.thread.' . md5($threadID));
     }
 
     private function unlockThreadData($threadID)
     {
-        Lock::release('messages.thread.' . md5($threadID));
+        $app = App::get();
+        $app->locks->release('messages.thread.' . md5($threadID));
     }
 
     private function lockUserData($userID)
     {
-        Lock::acquire('messages.user.' . md5($userID));
+        $app = App::get();
+        $app->locks->acquire('messages.user.' . md5($userID));
     }
 
     private function unlockUserData($userID)
     {
-        Lock::release('messages.user.' . md5($userID));
+        $app = App::get();
+        $app->locks->release('messages.user.' . md5($userID));
     }
 
 }
