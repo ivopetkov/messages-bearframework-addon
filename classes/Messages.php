@@ -18,8 +18,18 @@ use IvoPetkov\BearFrameworkAddons\Messages\UserThread;
 class Messages
 {
 
+    /**
+     *
+     * @var array 
+     */
     static private $cache = [];
 
+    /**
+     * 
+     * @param array $usersIDs
+     * @param array $options Available options: includeEmptyThreads
+     * @return \IvoPetkov\DataList
+     */
     public function getUsersThreadsList(array $usersIDs, array $options = []): \IvoPetkov\DataList
     {
         $includeEmptyThreads = isset($options['includeEmptyThreads']) && (int) $options['includeEmptyThreads'] > 0;
@@ -95,34 +105,41 @@ class Messages
      * 
      * @param string $userID
      * @param string $threadID
-     * @return IvoPetkov\BearFrameworkAddons\Messages\UserThread
+     * @return IvoPetkov\BearFrameworkAddons\Messages\UserThread|null
      */
-    public function getUserThread(string $userID, string $threadID): \IvoPetkov\BearFrameworkAddons\Messages\UserThread
+    public function getUserThread(string $userID, string $threadID): ?\IvoPetkov\BearFrameworkAddons\Messages\UserThread
     {
-        $userThread = new UserThread();
-        $userThread->id = $threadID;
-        $read = true;
         $userData = $this->getUserData($userID);
         if (is_array($userData)) {
             $userThreadsListData = $this->getUserThreadsListData($userID);
             foreach ($userData['threads'] as $threadData) {
                 if ($threadData['id'] === $threadID) {
+                    $userThread = new UserThread();
+                    $userThread->id = $threadID;
+                    $read = true;
                     if (isset($userThreadsListData['threads'][$threadID])) {
                         $lastMessageID = (string) $userThreadsListData['threads'][$threadID][0];
                         $userThread->lastUpdateDate = $userThreadsListData['threads'][$threadID][1];
                         $read = (isset($threadData['lastReadMessageID']) ? (string) $threadData['lastReadMessageID'] : '') === $lastMessageID;
-                        break;
                     } else {
                         $read = false;
                     }
+                    $userThread->status = $read ? 'read' : 'unread';
+                    return $userThread;
                 }
             }
         }
-        $userThread->status = $read ? 'read' : 'unread';
-        return $userThread;
+        return null;
     }
 
-    private function removeThreadFromUserThreadsListData($userID, $threadID, $userData = null)
+    /**
+     * 
+     * @param string $userID
+     * @param string $threadID
+     * @param array|null $userData
+     * @return void
+     */
+    private function removeThreadFromUserThreadsListData(string $userID, string $threadID, $userData = null): void
     {
         $tempUserThreadsListData = $this->getUserThreadsListData($userID, false, $userData);
         if (isset($tempUserThreadsListData['threads'][$threadID])) {
@@ -131,7 +148,13 @@ class Messages
         }
     }
 
-    public function deleteUserThread(string $userID, string $threadID)
+    /**
+     * 
+     * @param string $userID
+     * @param string $threadID
+     * @return void
+     */
+    public function deleteUserThread(string $userID, string $threadID): void
     {
         $this->lockUserData($userID);
         $this->lockThreadData($threadID);
@@ -175,7 +198,13 @@ class Messages
         $this->unlockUserData($userID);
     }
 
-    public function markUserThreadAsRead(string $userID, string $threadID)
+    /**
+     * 
+     * @param string $userID
+     * @param string $threadID
+     * @return void
+     */
+    public function markUserThreadAsRead(string $userID, string $threadID): void
     {
         $threadData = $this->getThreadData($threadID);
         if (is_array($threadData)) {
@@ -207,10 +236,10 @@ class Messages
      * @param string $userID
      * @param bool $updateMissing
      * @param array $userData
-     * @return type
+     * @return array
      * @throws \Exception
      */
-    private function getUserThreadsListData($userID, $updateMissing = true, $userData = null)
+    private function getUserThreadsListData($userID, $updateMissing = true, $userData = null): array
     {
         $app = App::get();
         $userIDMD5 = md5($userID);
@@ -242,14 +271,17 @@ class Messages
         if ($userData === null) {
             $userData = $this->getUserData($userID);
         }
-        if (!is_array($userData)) {
-            throw new \Exception('Invalid user data (' . $userID . ')');
-        }
 
         $result = [
             'id' => $userID,
             'threads' => []
         ];
+        if ($userData === null) {
+            return $result;
+        }
+        if (!is_array($userData)) {
+            throw new \Exception('Invalid user data (' . $userID . ')');
+        }
         foreach ($userData['threads'] as $userThreadData) {
             $threadID = $userThreadData['id'];
             if (isset($tempData['threads'][$threadID])) {
@@ -284,7 +316,13 @@ class Messages
         return $result;
     }
 
-    private function setUserThreadsListData($userID, $data)
+    /**
+     * 
+     * @param string $userID
+     * @param array $data
+     * @return void
+     */
+    private function setUserThreadsListData(string $userID, array $data): void
     {
         $app = App::get();
         $userIDMD5 = md5($userID);
@@ -298,7 +336,13 @@ class Messages
         self::$cache[$cacheKey] = $data;
     }
 
-    private function getUserData($userID)
+    /**
+     * 
+     * @param string $userID
+     * @return array|null
+     * @throws \Exception
+     */
+    private function getUserData(string $userID): ?array
     {
         $cacheKey = 'userData-' . $userID;
         if (isset(self::$cache[$cacheKey]) || array_key_exists($cacheKey, self::$cache)) { // the second check handles the null value
@@ -321,7 +365,13 @@ class Messages
         }
     }
 
-    private function setUserData($userID, $data)
+    /**
+     * 
+     * @param string $userID
+     * @param array $data
+     * @return void
+     */
+    private function setUserData(string $userID, array $data): void
     {
         $app = App::get();
         $userIDMD5 = md5($userID);
@@ -335,7 +385,13 @@ class Messages
         self::$cache[$cacheKey] = $data;
     }
 
-    private function getThreadData($threadID)
+    /**
+     * 
+     * @param string $threadID
+     * @return array|null
+     * @throws \Exception
+     */
+    private function getThreadData(string $threadID): ?array
     {
         $cacheKey = 'threadData-' . $threadID;
         if (isset(self::$cache[$cacheKey]) || array_key_exists($cacheKey, self::$cache)) { // the second check handles the null value
@@ -358,7 +414,12 @@ class Messages
         }
     }
 
-    private function deleteThreadData($threadID)
+    /**
+     * 
+     * @param string $threadID
+     * @return void
+     */
+    private function deleteThreadData(string $threadID): void
     {
         $cacheKey = 'threadData-' . $threadID;
         if (array_key_exists($cacheKey, self::$cache)) {
@@ -371,7 +432,13 @@ class Messages
         $app->data->rename($threadDataKey, $newThreadDataKey);
     }
 
-    private function setThreadData($threadID, $data)
+    /**
+     * 
+     * @param string $threadID
+     * @param array $data
+     * @return void
+     */
+    private function setThreadData(string $threadID, array $data): void
     {
         $app = App::get();
         $threadIDMD5 = md5($threadID);
@@ -382,7 +449,14 @@ class Messages
         self::$cache[$cacheKey] = $data;
     }
 
-    public function getThreadID(array $usersIDs, $createIfMissing = true): string // was createThread
+    /**
+     * 
+     * @param array $usersIDs
+     * @param bool $createIfMissing
+     * @return string|null
+     * @throws \Exception
+     */
+    public function getThreadID(array $usersIDs, bool $createIfMissing = true): ?string
     {
         if (empty($usersIDs)) {
             throw new \Exception('usersIDs cannot be empty');
@@ -449,7 +523,13 @@ class Messages
         return $threadID;
     }
 
-    public function isUserThread(string $userID, string $threadID)
+    /**
+     * 
+     * @param string $userID
+     * @param string $threadID
+     * @return bool
+     */
+    public function isUserThread(string $userID, string $threadID): bool
     {
         $userData = $this->getUserData($userID);
         if (is_array($userData)) {
@@ -462,7 +542,15 @@ class Messages
         return false;
     }
 
-    public function add(string $threadID, string $userID, string $text)
+    /**
+     * 
+     * @param string $threadID
+     * @param string $userID
+     * @param string $text
+     * @return void
+     * @throws \Exception
+     */
+    public function add(string $threadID, string $userID, string $text): void
     {
         $app = App::get();
         $app->hooks->execute('messageAdd', $threadID, $userID, $text);
@@ -515,25 +603,45 @@ class Messages
         }
     }
 
-    private function lockThreadData($threadID)
+    /**
+     * 
+     * @param string $threadID
+     * @return void
+     */
+    private function lockThreadData(string $threadID): void
     {
         $app = App::get();
         $app->locks->acquire('messages.thread.' . md5($threadID));
     }
 
-    private function unlockThreadData($threadID)
+    /**
+     * 
+     * @param string $threadID
+     * @return void
+     */
+    private function unlockThreadData(string $threadID): void
     {
         $app = App::get();
         $app->locks->release('messages.thread.' . md5($threadID));
     }
 
-    private function lockUserData($userID)
+    /**
+     * 
+     * @param string $userID
+     * @return void
+     */
+    private function lockUserData(string $userID): void
     {
         $app = App::get();
         $app->locks->acquire('messages.user.' . md5($userID));
     }
 
-    private function unlockUserData($userID)
+    /**
+     * 
+     * @param string $userID
+     * @return void
+     */
+    private function unlockUserData(string $userID): void
     {
         $app = App::get();
         $app->locks->release('messages.user.' . md5($userID));
