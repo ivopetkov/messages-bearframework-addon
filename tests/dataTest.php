@@ -66,6 +66,49 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
     /**
      * 
      */
+    public function testDelete()
+    {
+        $app = $this->getApp();
+        $threadID = $app->messages->getThreadID(['user1', 'user2']);
+
+        $app->messages->add($threadID, 'user1', 'hi1');
+
+        $user1Thread = $app->messages->getUserThread('user1', $threadID);
+        $user1ThreadsList = $app->messages->getUserThreadsList('user1');
+        $user2Thread = $app->messages->getUserThread('user2', $threadID);
+        $user2ThreadsList = $app->messages->getUserThreadsList('user2');
+        $this->assertEquals($user1Thread->usersIDs, ['user1', 'user2']);
+        $this->assertEquals($user1ThreadsList->length, 1);
+        $this->assertEquals($user1ThreadsList[0]->id, $threadID);
+        $this->assertEquals($user2Thread->usersIDs, ['user1', 'user2']);
+        $this->assertEquals($user2ThreadsList->length, 1);
+        $this->assertEquals($user2ThreadsList[0]->id, $threadID);
+
+        $app->messages->deleteUserThread('user1', $threadID);
+        $user1Thread = $app->messages->getUserThread('user1', $threadID);
+        $user1ThreadsList = $app->messages->getUserThreadsList('user1');
+        $user2Thread = $app->messages->getUserThread('user2', $threadID);
+        $user2ThreadsList = $app->messages->getUserThreadsList('user2');
+        $this->assertEquals($user1Thread, null);
+        $this->assertEquals($user1ThreadsList->length, 0);
+        $this->assertEquals($user2Thread->usersIDs, ['user2']);
+        $this->assertEquals($user2ThreadsList->length, 1);
+        $this->assertEquals($user2ThreadsList[0]->id, $threadID);
+
+        $app->messages->deleteUserThread('user2', $threadID);
+        $user1Thread = $app->messages->getUserThread('user1', $threadID);
+        $user1ThreadsList = $app->messages->getUserThreadsList('user1');
+        $user2Thread = $app->messages->getUserThread('user2', $threadID);
+        $user2ThreadsList = $app->messages->getUserThreadsList('user2');
+        $this->assertEquals($user1Thread, null);
+        $this->assertEquals($user1ThreadsList->length, 0);
+        $this->assertEquals($user2Thread, null);
+        $this->assertEquals($user2ThreadsList->length, 0);
+    }
+
+    /**
+     * 
+     */
     public function testUserList()
     {
         $app = $this->getApp();
