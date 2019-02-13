@@ -18,6 +18,8 @@ use IvoPetkov\BearFrameworkAddons\Messages\UserThread;
 class Messages
 {
 
+    use \BearFramework\App\EventsTrait;
+
     /**
      *
      * @var array 
@@ -28,23 +30,22 @@ class Messages
      * 
      * @param array $usersIDs
      * @param array $options Available options: includeEmptyThreads
-     * @return \IvoPetkov\DataList
+     * @return \BearFramework\DataList
      */
-    public function getUsersThreadsList(array $usersIDs, array $options = []): \IvoPetkov\DataList
+    public function getUsersThreadsList(array $usersIDs, array $options = []): \BearFramework\DataList
     {
         $includeEmptyThreads = isset($options['includeEmptyThreads']) && (int) $options['includeEmptyThreads'] > 0;
         $usersIDs = array_unique($usersIDs);
-        return new \IvoPetkov\DataList(function(\IvoPetkov\DataListContext $context) use ($usersIDs, $includeEmptyThreads) {
+        return new \BearFramework\DataList(function(\BearFramework\DataList\Context $context) use ($usersIDs, $includeEmptyThreads) {
             $statusFilter = null;
-            foreach ($context->filterByProperties as $index => $filterByProperty) {
-                if ($filterByProperty->property === 'status' && $filterByProperty->operator === 'equal') {
-                    if ($filterByProperty->value === 'read') {
-                        $statusFilter = 'read';
-                    } elseif ($filterByProperty->value === 'unread') {
-                        $statusFilter = 'unread';
-                    }
-                    if ($statusFilter !== null) {
-                        $filterByProperty->applied = true;
+            foreach ($context->actions as $action) {
+                if ($action instanceof \BearFramework\DataList\FilterByAction) {
+                    if ($action->property === 'status' && $action->operator === 'equal') {
+                        if ($action->value === 'read') {
+                            $statusFilter = 'read';
+                        } elseif ($action->value === 'unread') {
+                            $statusFilter = 'unread';
+                        }
                     }
                 }
             }
@@ -94,9 +95,9 @@ class Messages
     /**
      * 
      * @param string $userID
-     * @return \IvoPetkov\DataList|\IvoPetkov\BearFrameworkAddons\Messages\UserThread[]
+     * @return \BearFramework\DataList|\IvoPetkov\BearFrameworkAddons\Messages\UserThread[]
      */
-    public function getUserThreadsList(string $userID): \IvoPetkov\DataList
+    public function getUserThreadsList(string $userID): \BearFramework\DataList
     {
         return $this->getUsersThreadsList([$userID]);
     }
@@ -553,7 +554,10 @@ class Messages
     public function add(string $threadID, string $userID, string $text): void
     {
         $app = App::get();
-        $app->hooks->execute('messageAdd', $threadID, $userID, $text);
+        if ($this->hasEventListeners('beforeAddMessage')) {
+            $eventDetails = new \IvoPetkov\BearFrameworkAddons\Messages\BeforeAddMessageEventDetails($threadID, $userID, $text);
+            $this->dispatchEvent($eventDetails);
+        }
         $this->lockThreadData($threadID);
         $threadData = $this->getThreadData($threadID);
         if ($threadData === null) {
@@ -595,10 +599,16 @@ class Messages
             ];
             $this->setUserThreadsListData($otherUserID, $tempUserThreadsListData);
         }
-        $app->hooks->execute('messageAdded', $threadID, $userID, $text);
-        foreach ($threadData['usersIDs'] as $otherUserID) {
-            if ($userID !== $otherUserID) {
-                $app->hooks->execute('messageReceived', $otherUserID, $threadID, $userID, $text);
+        if ($this->hasEventListeners('addMessage')) {
+            $eventDetails = new \IvoPetkov\BearFrameworkAddons\Messages\AddMessageEventDetails($threadID, $userID, $text);
+            $this->dispatchEvent($eventDetails);
+        }
+        if ($this->hasEventListeners('receiveMessage')) {
+            foreach ($threadData['usersIDs'] as $otherUserID) {
+                if ($userID !== $otherUserID) {
+                    $eventDetails = new \IvoPetkov\BearFrameworkAddons\Messages\ReceiveMessageEventDetails($threadID, $otherUserID, $text, $userID);
+                    $this->dispatchEvent($eventDetails);
+                }
             }
         }
     }

@@ -78,10 +78,10 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
         $user2Thread = $app->messages->getUserThread('user2', $threadID);
         $user2ThreadsList = $app->messages->getUserThreadsList('user2');
         $this->assertEquals($user1Thread->usersIDs, ['user1', 'user2']);
-        $this->assertEquals($user1ThreadsList->length, 1);
+        $this->assertEquals($user1ThreadsList->count(), 1);
         $this->assertEquals($user1ThreadsList[0]->id, $threadID);
         $this->assertEquals($user2Thread->usersIDs, ['user1', 'user2']);
-        $this->assertEquals($user2ThreadsList->length, 1);
+        $this->assertEquals($user2ThreadsList->count(), 1);
         $this->assertEquals($user2ThreadsList[0]->id, $threadID);
 
         $app->messages->deleteUserThread('user1', $threadID);
@@ -90,9 +90,9 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
         $user2Thread = $app->messages->getUserThread('user2', $threadID);
         $user2ThreadsList = $app->messages->getUserThreadsList('user2');
         $this->assertEquals($user1Thread, null);
-        $this->assertEquals($user1ThreadsList->length, 0);
+        $this->assertEquals($user1ThreadsList->count(), 0);
         $this->assertEquals($user2Thread->usersIDs, ['user2']);
-        $this->assertEquals($user2ThreadsList->length, 1);
+        $this->assertEquals($user2ThreadsList->count(), 1);
         $this->assertEquals($user2ThreadsList[0]->id, $threadID);
 
         $app->messages->deleteUserThread('user2', $threadID);
@@ -101,9 +101,9 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
         $user2Thread = $app->messages->getUserThread('user2', $threadID);
         $user2ThreadsList = $app->messages->getUserThreadsList('user2');
         $this->assertEquals($user1Thread, null);
-        $this->assertEquals($user1ThreadsList->length, 0);
+        $this->assertEquals($user1ThreadsList->count(), 0);
         $this->assertEquals($user2Thread, null);
-        $this->assertEquals($user2ThreadsList->length, 0);
+        $this->assertEquals($user2ThreadsList->count(), 0);
     }
 
     /**
@@ -121,7 +121,7 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
         $app->messages->add($thread2ID, 'user3', 'hi user1');
         sleep(1); //added for sorting precision
         $list = $app->messages->getUserThreadsList('user1');
-        $this->assertTrue($list->length === 2);
+        $this->assertTrue($list->count() === 2);
         $this->assertTrue($list[0]->status === 'unread');
         $this->assertTrue($list[0]->messagesList[1]->userID === 'user3');
         $this->assertTrue($list[0]->messagesList[1]->text === 'hi user1');
@@ -152,11 +152,33 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
         sleep(1); //added for sorting precision
 
         $list = $app->messages->getUsersThreadsList(['user1', 'userA']);
-        $this->assertTrue($list->length === 4);
+        $this->assertTrue($list->count() === 4);
         $this->assertTrue($list[0]->messagesList[0]->text === 'hi userB');
         $this->assertTrue($list[1]->messagesList[0]->text === 'hi user2, its userA');
         $this->assertTrue($list[2]->messagesList[0]->text === 'hi user3');
         $this->assertTrue($list[3]->messagesList[0]->text === 'hi user2');
+    }
+
+    /**
+     * 
+     */
+    public function testListFilter()
+    {
+        $app = $this->getApp();
+
+        $threadID = $app->messages->getThreadID(['user1', 'user2']);
+        $app->messages->add($threadID, 'user2', 'hi');
+        $app->messages->markUserThreadAsRead('user1', $threadID);
+
+        $threadID = $app->messages->getThreadID(['user1', 'user3']);
+        $app->messages->add($threadID, 'user3', 'hi');
+        $app->messages->markUserThreadAsRead('user1', $threadID);
+
+        $threadID = $app->messages->getThreadID(['user1', 'user4']);
+        $app->messages->add($threadID, 'user4', 'hi');
+
+        $this->assertEquals($app->messages->getUserThreadsList('user1')->filterBy('status', 'read')->count(), 2);
+        $this->assertEquals($app->messages->getUserThreadsList('user1')->filterBy('status', 'unread')->count(), 1);
     }
 
 }

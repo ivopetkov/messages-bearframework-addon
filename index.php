@@ -10,13 +10,11 @@
 use BearFramework\App;
 
 $app = App::get();
-$context = $app->context->get(__FILE__);
+$context = $app->contexts->get(__FILE__);
 
 $context->classes
-        ->add('IvoPetkov\BearFrameworkAddons\Messages\Message', 'classes/Messages/Message.php')
-        ->add('IvoPetkov\BearFrameworkAddons\Messages\Thread', 'classes/Messages/Thread.php')
-        ->add('IvoPetkov\BearFrameworkAddons\Messages\UserThread', 'classes/Messages/UserThread.php')
-        ->add('IvoPetkov\BearFrameworkAddons\Messages', 'classes/Messages.php');
+        ->add('IvoPetkov\BearFrameworkAddons\Messages', 'classes/Messages.php')
+        ->add('IvoPetkov\BearFrameworkAddons\Messages\*', 'classes/Messages/*.php');
 
 $app->shortcuts
         ->add('messages', function() {
