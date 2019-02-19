@@ -553,10 +553,9 @@ class Messages
      */
     public function add(string $threadID, string $userID, string $text): void
     {
-        $app = App::get();
         if ($this->hasEventListeners('beforeAddMessage')) {
             $eventDetails = new \IvoPetkov\BearFrameworkAddons\Messages\BeforeAddMessageEventDetails($threadID, $userID, $text);
-            $this->dispatchEvent($eventDetails);
+            $this->dispatchEvent('beforeAddMessage', $eventDetails);
         }
         $this->lockThreadData($threadID);
         $threadData = $this->getThreadData($threadID);
@@ -601,13 +600,13 @@ class Messages
         }
         if ($this->hasEventListeners('addMessage')) {
             $eventDetails = new \IvoPetkov\BearFrameworkAddons\Messages\AddMessageEventDetails($threadID, $userID, $text);
-            $this->dispatchEvent($eventDetails);
+            $this->dispatchEvent('addMessage', $eventDetails);
         }
         if ($this->hasEventListeners('receiveMessage')) {
             foreach ($threadData['usersIDs'] as $otherUserID) {
                 if ($userID !== $otherUserID) {
                     $eventDetails = new \IvoPetkov\BearFrameworkAddons\Messages\ReceiveMessageEventDetails($threadID, $otherUserID, $text, $userID);
-                    $this->dispatchEvent($eventDetails);
+                    $this->dispatchEvent('receiveMessage', $eventDetails);
                 }
             }
         }
