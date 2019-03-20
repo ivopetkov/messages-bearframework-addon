@@ -18,7 +18,7 @@ use IvoPetkov\BearFrameworkAddons\Messages\UserThread;
 class Messages
 {
 
-    use \BearFramework\App\EventsTrait;
+    use \BearFramework\EventsTrait;
 
     /**
      *
