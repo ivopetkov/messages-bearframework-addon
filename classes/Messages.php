@@ -36,7 +36,7 @@ class Messages
     {
         $includeEmptyThreads = isset($options['includeEmptyThreads']) && (int) $options['includeEmptyThreads'] > 0;
         $usersIDs = array_unique($usersIDs);
-        return new \BearFramework\DataList(function(\BearFramework\DataList\Context $context) use ($usersIDs, $includeEmptyThreads) {
+        return new \BearFramework\DataList(function (\BearFramework\DataList\Context $context) use ($usersIDs, $includeEmptyThreads) {
             $statusFilter = null;
             foreach ($context->actions as $action) {
                 if ($action instanceof \BearFramework\DataList\FilterByAction) {
@@ -84,7 +84,7 @@ class Messages
             $result = [];
             foreach ($threadsLastUpdatedDates as $threadID => $lastUpdateDate) {
                 $userID = $threadsUsers[$threadID];
-                $result[] = function() use ($userID, $threadID) {
+                $result[] = function () use ($userID, $threadID) {
                     return $this->getUserThread($userID, $threadID);
                 };
             }
@@ -462,7 +462,7 @@ class Messages
         if (empty($usersIDs)) {
             throw new \Exception('usersIDs cannot be empty');
         }
-        $getUserData = function($userID) {
+        $getUserData = function ($userID) {
             $data = $this->getUserData($userID);
             if (!is_array($data)) {
                 $data = [];
@@ -655,5 +655,4 @@ class Messages
         $app = App::get();
         $app->locks->release('messages.user.' . md5($userID));
     }
-
 }
