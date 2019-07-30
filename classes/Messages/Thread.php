@@ -30,7 +30,7 @@ class Thread
     function __construct()
     {
 
-        $getThreadData = function() {
+        $getThreadData = function () {
             $app = App::get();
             $idMD5 = md5($this->id);
             $threadDataKey = 'messages/thread/' . substr($idMD5, 0, 2) . '/' . substr($idMD5, 2, 2) . '/' . $idMD5 . '.json';
@@ -46,7 +46,7 @@ class Thread
         };
 
         $this->defineProperty('usersIDs', [
-            'init' => function() use ($getThreadData) {
+            'init' => function () use ($getThreadData) {
                 $threadData = $getThreadData();
                 return isset($threadData['usersIDs']) ? $threadData['usersIDs'] : [];
             },
@@ -54,28 +54,28 @@ class Thread
         ]);
 
         $this->defineProperty('messagesList', [
-            'init' => function() use ($getThreadData) {
-                return new \BearFramework\DataList(function() use ($getThreadData) {
-                            $result = [];
-                            $threadData = $getThreadData();
-                            if (is_array($threadData) && isset($threadData['messages'])) {
-                                foreach ($threadData['messages'] as $messageData) {
-                                    $message = new Message();
-                                    $message->id = $messageData['id'];
-                                    $message->userID = $messageData['userID'];
-                                    $message->text = $messageData['text'];
-                                    $message->dateCreated = $messageData['dateCreated'];
-                                    $result[] = $message;
-                                }
-                            }
-                            return $result;
-                        });
+            'init' => function () use ($getThreadData) {
+                return new \BearFramework\DataList(function () use ($getThreadData) {
+                    $result = [];
+                    $threadData = $getThreadData();
+                    if (is_array($threadData) && isset($threadData['messages'])) {
+                        foreach ($threadData['messages'] as $messageData) {
+                            $message = new Message();
+                            $message->id = $messageData['id'];
+                            $message->userID = $messageData['userID'];
+                            $message->text = $messageData['text'];
+                            $message->dateCreated = $messageData['dateCreated'];
+                            $result[] = $message;
+                        }
+                    }
+                    return $result;
+                });
             },
             'readonly' => true
         ]);
 
         $this->defineProperty('lastMessage', [
-            'init' => function() use ($getThreadData) {
+            'init' => function () use ($getThreadData) {
                 $threadData = $getThreadData();
                 if (is_array($threadData) && isset($threadData['messages'])) {
                     $lastMessageData = end($threadData['messages']);
@@ -93,5 +93,4 @@ class Thread
             'readonly' => true
         ]);
     }
-
 }
