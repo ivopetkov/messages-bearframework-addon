@@ -243,12 +243,11 @@ class Messages
     private function getUserThreadsListData($userID, $updateMissing = true, $userData = null): array
     {
         $app = App::get();
-        $userIDMD5 = md5($userID);
         $cacheKey = 'userThreadsListData-' . $userID;
         if (isset(self::$cache[$cacheKey])) {
             $tempData = self::$cache[$cacheKey];
         } else {
-            $tempUserThreadsListDataKey = '.temp/messages/userthreads/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
+            $tempUserThreadsListDataKey = $this->getTempUserThreadsListDataKey($userID);
             $tempData = [];
             $tempDataValue = $app->data->getValue($tempUserThreadsListDataKey);
             if ($tempDataValue !== null) {
@@ -326,8 +325,7 @@ class Messages
     private function setUserThreadsListData(string $userID, array $data): void
     {
         $app = App::get();
-        $userIDMD5 = md5($userID);
-        $tempUserThreadsListDataKey = '.temp/messages/userthreads/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
+        $tempUserThreadsListDataKey = $this->getTempUserThreadsListDataKey($userID);
         if (empty($data['threads'])) {
             $app->data->delete($tempUserThreadsListDataKey);
         } else {
@@ -654,5 +652,100 @@ class Messages
     {
         $app = App::get();
         $app->locks->release('messages.user.' . md5($userID));
+    }
+
+    /**
+     * Checks and repairs the messages
+     *
+     * @return boolean Returns TRUE if data fixes are applied
+     */
+    public function repair(): bool
+    {
+        $errors = [];
+        $app = App::get();
+        $this->clearCache();
+
+        // Check if all threads are correct and in the users data
+        $usersThreads = [];
+        for ($i = 0; $i < 256; $i++) {
+            $prefix = str_pad(base_convert($i, 10, 16), 2, '0', STR_PAD_LEFT);
+            $list = $app->data->getList()
+                ->filterBy('key', 'messages/thread/' . $prefix . '/', 'startWith')
+                ->sliceProperties(['key']);
+            foreach ($list as $item) {
+                $key = $item->key;
+                $threadData = json_decode($app->data->getValue($key), true);
+                if (is_array($threadData)) {
+                    if (isset($threadData['id'], $threadData['usersIDs']) && is_array($threadData['usersIDs'])) {
+                        foreach ($threadData['usersIDs'] as $userID) {
+                            if (!isset($usersThreads[$userID])) {
+                                $usersThreads[$userID] = [];
+                            }
+                            $usersThreads[$userID][] = $threadData['id'];
+                        }
+                    } else {
+                        $errors[] = $key . ' is invalid';
+                    }
+                } else {
+                    $errors[] = $key . ' is not valid JSON';
+                }
+            }
+        }
+        foreach ($usersThreads as $userID => $expectedUserThreads) {
+            $userData = $this->getUserData($userID);
+            if (is_array($userData['threads'])) {
+                $userDataThreads = [];
+                foreach ($userData['threads'] as $userThreadData) {
+                    $userDataThreads[] = $userThreadData['id'];
+                }
+                sort($expectedUserThreads);
+                sort($userDataThreads);
+                $threadsIDsToAdd = array_diff($expectedUserThreads, $userDataThreads);
+                $threadsIDsToRemove = array_diff($userDataThreads, $expectedUserThreads);
+                if (!empty($threadsIDsToAdd) || !empty($threadsIDsToRemove)) {
+                    foreach ($threadsIDsToAdd as $threadIDToAdd) {
+                        $userData['threads'][] = ['id' => $threadIDToAdd];
+                        $errors[] = 'The thread "' . $threadIDToAdd . '" was missing for the user "' . $userID . '"';
+                    }
+                    foreach ($threadsIDsToRemove as $threadIDToRemove) {
+                        foreach ($userData['threads'] as $i => $userThreadData) {
+                            if ($userThreadData['id'] === $threadIDToRemove) {
+                                unset($userData['threads'][$i]);
+                            }
+                        }
+                        $userData['threads'] = array_values($userData['threads']);
+                        $errors[] = 'The thread "' . $threadIDToRemove . '" was removed from the user "' . $userID . '" because it does not exists';
+                    }
+                    $this->setUserData($userID, $userData);
+                }
+            } else {
+                $errors[] = 'User data (' . $userID . ') is invalid';
+            }
+            $this->clearCache(); // to save memory from the user data
+        }
+        //print_r($errors);
+        return !empty($errors);
+    }
+
+    /**
+     * Clears the data cache
+     *
+     * @return void
+     */
+    private function clearCache(): void
+    {
+        self::$cache = [];
+    }
+
+    /**
+     * 
+     * 
+     * @param string $userID
+     * @return string
+     */
+    private function getTempUserThreadsListDataKey(string $userID): string
+    {
+        $userIDMD5 = md5($userID);
+        return '.temp/messages/userthreads/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
     }
 }

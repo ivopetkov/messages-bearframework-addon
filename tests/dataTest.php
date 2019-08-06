@@ -181,4 +181,32 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
         $this->assertEquals($app->messages->getUserThreadsList('user1')->filterBy('status', 'unread')->count(), 1);
     }
 
+    public function testRepair()
+    {
+        $app = $this->getApp();
+
+        $threadID = $app->messages->getThreadID(['user1', 'user2']);
+        $app->messages->add($threadID, 'user2', 'hi');
+
+        $threadID = $app->messages->getThreadID(['user1', 'user3']);
+        $app->messages->add($threadID, 'user3', 'hi');
+
+        // Remove thread data from user1
+        $dataKeyToBreak = 'messages/user/24/c9/24c9e15e52afc47c225b757e7bee1f9d.json'; // user1
+        $data = json_decode($app->data->getValue($dataKeyToBreak), true);
+        unset($data['threads'][1]);
+        $app->data->setValue($dataKeyToBreak, json_encode($data));
+
+        $this->assertTrue($app->messages->repair());
+        $this->assertFalse($app->messages->repair());
+
+        // Add invalid thread data to user1
+        $dataKeyToBreak = 'messages/user/24/c9/24c9e15e52afc47c225b757e7bee1f9d.json'; // user1
+        $data = json_decode($app->data->getValue($dataKeyToBreak), true);
+        $data['threads'][] = ['id' => 'invalid'];
+        $app->data->setValue($dataKeyToBreak, json_encode($data));
+
+        $this->assertTrue($app->messages->repair());
+        $this->assertFalse($app->messages->repair());
+    }
 }
