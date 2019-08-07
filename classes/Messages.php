@@ -660,6 +660,32 @@ class Messages
         $app->locks->release('messages.user.' . md5($userID));
     }
 
+
+    /**
+     * Returns a list containing all the users IDs that have messages
+     *
+     * @return array
+     */
+    public function getUsersIDs(): array
+    {
+        $result = [];
+        $app = App::get();
+        for ($i = 0; $i < 256; $i++) {
+            $prefix = str_pad(base_convert($i, 10, 16), 2, '0', STR_PAD_LEFT);
+            $list = $app->data->getList()
+                ->filterBy('key', 'messages/user/' . $prefix . '/', 'startWith')
+                ->sliceProperties(['key']);
+            foreach ($list as $item) {
+                $key = $item->key;
+                $userData = json_decode($app->data->getValue($key), true);
+                if (is_array($userData) && isset($userData['id'])) {
+                    $result[] = $userData['id'];
+                }
+            }
+        }
+        return $result;
+    }
+
     /**
      * Returns a list of errors if any found
      * 

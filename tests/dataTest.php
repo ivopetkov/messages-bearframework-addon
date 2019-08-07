@@ -181,6 +181,29 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
         $this->assertEquals($app->messages->getUserThreadsList('user1')->filterBy('status', 'unread')->count(), 1);
     }
 
+    /**
+     * 
+     */
+    public function testGetUsersIDs()
+    {
+        $app = $this->getApp();
+
+        $threadID = $app->messages->getThreadID(['user1', 'user2']);
+        $app->messages->add($threadID, 'user2', 'hi');
+        $app->messages->markUserThreadAsRead('user1', $threadID);
+
+        $threadID = $app->messages->getThreadID(['user1', 'user3']);
+        $app->messages->add($threadID, 'user3', 'hi');
+        $app->messages->markUserThreadAsRead('user1', $threadID);
+
+        $threadID = $app->messages->getThreadID(['user1', 'user4']);
+        $app->messages->add($threadID, 'user4', 'hi');
+
+        $usersIDs = $app->messages->getUsersIDs();
+        sort($usersIDs);
+        $this->assertEquals($usersIDs, ['user1', 'user2', 'user3', 'user4']);
+    }
+
     public function testRepairInvalidUserData()
     {
         $app = $this->getApp();
