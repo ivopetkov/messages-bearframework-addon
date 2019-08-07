@@ -54,7 +54,7 @@ class Messages
             foreach ($usersIDs as $userID) {
                 $userData = $this->getUserData($userID);
                 if (is_array($userData)) {
-                    $userThreadsListData = $this->getUserThreadsListData($userID, true, $userData);
+                    $userThreadsListData = $this->getTempUserThreadsListData($userID, true, $userData);
                     foreach ($userData['threads'] as $userThreadData) {
                         $threadID = $userThreadData['id'];
                         if (!isset($userThreadsListData['threads'][$threadID])) {
@@ -112,7 +112,7 @@ class Messages
     {
         $userData = $this->getUserData($userID);
         if (is_array($userData)) {
-            $userThreadsListData = $this->getUserThreadsListData($userID);
+            $userThreadsListData = $this->getTempUserThreadsListData($userID);
             foreach ($userData['threads'] as $threadData) {
                 if ($threadData['id'] === $threadID) {
                     $userThread = new UserThread();
@@ -140,12 +140,43 @@ class Messages
      * @param array|null $userData
      * @return void
      */
-    private function removeThreadFromUserThreadsListData(string $userID, string $threadID, $userData = null): void
+    private function removeThreadFromTempUserThreadsListData(string $userID, string $threadID, $userData = null): void
     {
-        $tempUserThreadsListData = $this->getUserThreadsListData($userID, false, $userData);
+        $tempUserThreadsListData = $this->getTempUserThreadsListData($userID, false, $userData);
         if (isset($tempUserThreadsListData['threads'][$threadID])) {
             unset($tempUserThreadsListData['threads'][$threadID]);
-            $this->setUserThreadsListData($userID, $tempUserThreadsListData);
+            $this->setTempUserThreadsListData($userID, $tempUserThreadsListData);
+        }
+    }
+
+    /**
+     * 
+     * @param string $userID
+     * @param string $threadID
+     * @return void
+     */
+    private function removeUserFromThreadData(string $userID, string $threadID): void
+    {
+        $threadData = $this->getThreadData($threadID);
+        if (is_array($threadData)) {
+            $userIDIndex = array_search($userID, $threadData['usersIDs']);
+            if ($userIDIndex !== false) {
+                unset($threadData['usersIDs'][$userIDIndex]);
+                if (empty($threadData['usersIDs'])) {
+                    $this->deleteThreadData($threadID);
+                } else {
+                    $threadData['usersIDs'] = array_values($threadData['usersIDs']);
+                    foreach ($threadData['messages'] as $i => $message) {
+                        if ($message['userID'] === $userID) {
+                            $threadData['messages'][$i]['userID'] = null;
+                        }
+                    }
+                    foreach ($threadData['usersIDs'] as $otherUserID) {
+                        $this->removeThreadFromTempUserThreadsListData($otherUserID, $threadID); // will be updated on get
+                    }
+                    $this->setThreadData($threadID, $threadData);
+                }
+            }
         }
     }
 
@@ -172,28 +203,8 @@ class Messages
             if ($hasUserDataChange) {
                 $this->setUserData($userID, $userData);
             }
-            $this->removeThreadFromUserThreadsListData($userID, $threadID, $userData);
-            $threadData = $this->getThreadData($threadID);
-            if (is_array($threadData)) {
-                $userIDIndex = array_search($userID, $threadData['usersIDs']);
-                if ($userIDIndex !== false) {
-                    unset($threadData['usersIDs'][$userIDIndex]);
-                    if (empty($threadData['usersIDs'])) {
-                        $this->deleteThreadData($threadID);
-                    } else {
-                        $threadData['usersIDs'] = array_values($threadData['usersIDs']);
-                        foreach ($threadData['messages'] as $i => $message) {
-                            if ($message['userID'] === $userID) {
-                                $threadData['messages'][$i]['userID'] = null;
-                            }
-                        }
-                        foreach ($threadData['usersIDs'] as $otherUserID) {
-                            $this->removeThreadFromUserThreadsListData($otherUserID, $threadID);
-                        }
-                        $this->setThreadData($threadID, $threadData);
-                    }
-                }
-            }
+            $this->removeThreadFromTempUserThreadsListData($userID, $threadID, $userData);
+            $this->removeUserFromThreadData($userID, $threadID);
         }
         $this->unlockThreadData($threadID);
         $this->unlockUserData($userID);
@@ -240,7 +251,7 @@ class Messages
      * @return array
      * @throws \Exception
      */
-    private function getUserThreadsListData($userID, $updateMissing = true, $userData = null): array
+    private function getTempUserThreadsListData($userID, $updateMissing = true, $userData = null): array
     {
         $app = App::get();
         $cacheKey = 'userThreadsListData-' . $userID;
@@ -308,7 +319,7 @@ class Messages
                             $otherUsersIDs // other users ids
                         ];
                     }
-                    $this->setUserThreadsListData($userID, $tempData);
+                    $this->setTempUserThreadsListData($userID, $tempData);
                     $result['threads'][$threadID] = $tempData['threads'][$threadID];
                 }
             }
@@ -322,7 +333,7 @@ class Messages
      * @param array $data
      * @return void
      */
-    private function setUserThreadsListData(string $userID, array $data): void
+    private function setTempUserThreadsListData(string $userID, array $data): void
     {
         $app = App::get();
         $tempUserThreadsListDataKey = $this->getTempUserThreadsListDataKey($userID);
@@ -348,8 +359,7 @@ class Messages
             return self::$cache[$cacheKey];
         } else {
             $app = App::get();
-            $userIDMD5 = md5($userID);
-            $userDataKey = 'messages/user/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
+            $userDataKey = $this->getUserDataKey($userID);
             $userDataValue = $app->data->getValue($userDataKey);
             if ($userDataValue !== null) {
                 $userData = json_decode($userDataValue, true);
@@ -373,8 +383,7 @@ class Messages
     private function setUserData(string $userID, array $data): void
     {
         $app = App::get();
-        $userIDMD5 = md5($userID);
-        $userDataKey = 'messages/user/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
+        $userDataKey = $this->getUserDataKey($userID);
         if (empty($data['threads'])) {
             $app->data->delete($userDataKey);
         } else {
@@ -397,8 +406,7 @@ class Messages
             return self::$cache[$cacheKey];
         } else {
             $app = App::get();
-            $threadIDMD5 = md5($threadID);
-            $threadDataKey = 'messages/thread/' . substr($threadIDMD5, 0, 2) . '/' . substr($threadIDMD5, 2, 2) . '/' . $threadIDMD5 . '.json';
+            $threadDataKey = $this->getThreadDataKey($threadID);
             $threadDataValue = $app->data->getValue($threadDataKey);
             if ($threadDataValue !== null) {
                 $threadData = json_decode($threadDataValue, true);
@@ -425,9 +433,8 @@ class Messages
             unset(self::$cache[$cacheKey]);
         }
         $app = App::get();
-        $threadIDMD5 = md5($threadID);
-        $threadDataKey = 'messages/thread/' . substr($threadIDMD5, 0, 2) . '/' . substr($threadIDMD5, 2, 2) . '/' . $threadIDMD5 . '.json';
-        $newThreadDataKey = '.recyclebin/messages/thread/' . substr($threadIDMD5, 0, 2) . '/' . substr($threadIDMD5, 2, 2) . '/' . $threadIDMD5 . '.json';
+        $threadDataKey = $this->getThreadDataKey($threadID);
+        $newThreadDataKey = '.recyclebin/' . $threadDataKey;
         $app->data->rename($threadDataKey, $newThreadDataKey);
     }
 
@@ -440,8 +447,7 @@ class Messages
     private function setThreadData(string $threadID, array $data): void
     {
         $app = App::get();
-        $threadIDMD5 = md5($threadID);
-        $threadDataKey = 'messages/thread/' . substr($threadIDMD5, 0, 2) . '/' . substr($threadIDMD5, 2, 2) . '/' . $threadIDMD5 . '.json';
+        $threadDataKey = $this->getThreadDataKey($threadID);
         $dataItem = $app->data->make($threadDataKey, json_encode($data));
         $app->data->set($dataItem);
         $cacheKey = 'threadData-' . $threadID;
@@ -477,7 +483,7 @@ class Messages
             $this->lockUserData($firstUserID);
         }
         $firstUserData = $getUserData($firstUserID);
-        $userThreadsListData = $this->getUserThreadsListData($firstUserID, true, $firstUserData);
+        $userThreadsListData = $this->getTempUserThreadsListData($firstUserID, true, $firstUserData);
         if (isset($userThreadsListData['threads'])) {
             foreach ($userThreadsListData['threads'] as $threadID => $userThreadListData) {
                 $threadUserIDs = $userThreadListData[2];
@@ -588,13 +594,13 @@ class Messages
         $this->unlockUserData($userID);
 
         foreach ($threadData['usersIDs'] as $otherUserID) {
-            $tempUserThreadsListData = $this->getUserThreadsListData($otherUserID, false, $userID === $otherUserID ? $userData : null);
+            $tempUserThreadsListData = $this->getTempUserThreadsListData($otherUserID, false, $userID === $otherUserID ? $userData : null);
             $tempUserThreadsListData['threads'][$threadID] = [
                 $messageID, // last message id
                 $messageTime, // last message time
                 array_values(array_diff($threadData['usersIDs'], [$otherUserID])) // other users ids
             ];
-            $this->setUserThreadsListData($otherUserID, $tempUserThreadsListData);
+            $this->setTempUserThreadsListData($otherUserID, $tempUserThreadsListData);
         }
         if ($this->hasEventListeners('addMessage')) {
             $eventDetails = new \IvoPetkov\BearFrameworkAddons\Messages\AddMessageEventDetails($threadID, $userID, $text);
@@ -691,9 +697,18 @@ class Messages
                 }
             }
         }
+        $usersIDsToRemoveFromThreads = [];
         foreach ($usersThreads as $userID => $expectedUserThreads) {
+            $this->lockUserData($userID);
             $userData = $this->getUserData($userID);
-            if (is_array($userData['threads'])) {
+            if ($userData === null) { // no such user
+                foreach ($expectedUserThreads as $expectedUserThreadID) {
+                    if (!isset($usersIDsToRemoveFromThreads[$expectedUserThreadID])) {
+                        $usersIDsToRemoveFromThreads[$expectedUserThreadID] = [];
+                    }
+                    $usersIDsToRemoveFromThreads[$expectedUserThreadID][] = $userID;
+                }
+            } elseif (is_array($userData['threads'])) {
                 $userDataThreads = [];
                 foreach ($userData['threads'] as $userThreadData) {
                     $userDataThreads[] = $userThreadData['id'];
@@ -721,7 +736,19 @@ class Messages
             } else {
                 $errors[] = 'User data (' . $userID . ') is invalid';
             }
-            $this->clearCache(); // to save memory from the user data
+            $this->unlockUserData($userID);
+            $this->clearCache(); // to save memory
+        }
+        if (!empty($usersIDsToRemoveFromThreads)) {
+            foreach ($usersIDsToRemoveFromThreads as $threadID => $usersIDs) {
+                $this->lockThreadData($threadID);
+                foreach ($usersIDs as $userID) {
+                    $errors[] = 'The user "' . $userID . '" was removed from the thread "' . $threadID . '" because it does not exists';
+                    $this->removeUserFromThreadData($userID, $threadID);
+                }
+                $this->unlockThreadData($threadID);
+                $this->clearCache(); // to save memory
+            }
         }
         //print_r($errors);
         return !empty($errors);
@@ -747,5 +774,29 @@ class Messages
     {
         $userIDMD5 = md5($userID);
         return '.temp/messages/userthreads/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
+    }
+
+    /**
+     * 
+     *
+     * @param string $threadID
+     * @return string
+     */
+    private function getThreadDataKey(string $threadID): string
+    {
+        $threadIDMD5 = md5($threadID);
+        return 'messages/thread/' . substr($threadIDMD5, 0, 2) . '/' . substr($threadIDMD5, 2, 2) . '/' . $threadIDMD5 . '.json';
+    }
+
+    /**
+     * 
+     *
+     * @param string $userID
+     * @return string
+     */
+    private function getUserDataKey(string $userID): string
+    {
+        $userIDMD5 = md5($userID);
+        return  'messages/user/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
     }
 }

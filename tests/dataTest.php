@@ -181,7 +181,7 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
         $this->assertEquals($app->messages->getUserThreadsList('user1')->filterBy('status', 'unread')->count(), 1);
     }
 
-    public function testRepair()
+    public function testRepairInvalidUserData()
     {
         $app = $this->getApp();
 
@@ -208,5 +208,25 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
 
         $this->assertTrue($app->messages->repair());
         $this->assertFalse($app->messages->repair());
+    }
+
+    public function testRepairMissingUserData()
+    {
+        $app = $this->getApp();
+
+        $threadID = $app->messages->getThreadID(['user1', 'user2']);
+        $app->messages->add($threadID, 'user2', 'hi');
+
+        // Remove user data for user1
+        $dataKeyToRemove = 'messages/user/24/c9/24c9e15e52afc47c225b757e7bee1f9d.json'; // user1
+        $app->data->delete($dataKeyToRemove);
+
+        // Remove user data for user2
+        $dataKeyToRemove = 'messages/user/7e/58/7e58d63b60197ceb55a1c487989a3720.json'; // user2
+        $app->data->delete($dataKeyToRemove);
+
+        $this->assertTrue($app->messages->repair());
+        $this->assertFalse($app->messages->repair());
+
     }
 }
