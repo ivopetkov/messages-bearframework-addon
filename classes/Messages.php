@@ -661,11 +661,33 @@ class Messages
     }
 
     /**
+     * Returns a list of errors if any found
+     * 
+     * @return array
+     */
+    public function analyze(): array
+    {
+        $errors = $this->repairData(false);
+        return $errors;
+    }
+
+    /**
      * Checks and repairs the messages
      *
-     * @return boolean Returns TRUE if data fixes are applied
+     * @return bool Returns TRUE if data fixes are applied
      */
     public function repair(): bool
+    {
+        $errors = $this->repairData(true);
+        return !empty($errors);
+    }
+
+    /**
+     * 
+     * @param bool $repair
+     * @return array
+     */
+    private function repairData(bool $repair): array
     {
         $errors = [];
         $app = App::get();
@@ -731,7 +753,9 @@ class Messages
                         $userData['threads'] = array_values($userData['threads']);
                         $errors[] = 'The thread "' . $threadIDToRemove . '" was removed from the user "' . $userID . '" because it does not exists';
                     }
-                    $this->setUserData($userID, $userData);
+                    if ($repair) {
+                        $this->setUserData($userID, $userData);
+                    }
                 }
             } else {
                 $errors[] = 'User data (' . $userID . ') is invalid';
@@ -744,14 +768,17 @@ class Messages
                 $this->lockThreadData($threadID);
                 foreach ($usersIDs as $userID) {
                     $errors[] = 'The user "' . $userID . '" was removed from the thread "' . $threadID . '" because it does not exists';
-                    $this->removeUserFromThreadData($userID, $threadID);
+                    if ($repair) {
+                        $this->removeUserFromThreadData($userID, $threadID);
+                    }
                 }
                 $this->unlockThreadData($threadID);
                 $this->clearCache(); // to save memory
             }
         }
+        $this->clearCache();
         //print_r($errors);
-        return !empty($errors);
+        return $errors;
     }
 
     /**

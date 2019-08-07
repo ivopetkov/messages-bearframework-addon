@@ -197,7 +197,9 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
         unset($data['threads'][1]);
         $app->data->setValue($dataKeyToBreak, json_encode($data));
 
+        $this->assertTrue(sizeof($app->messages->analyze()) === 1);
         $this->assertTrue($app->messages->repair());
+        $this->assertTrue(sizeof($app->messages->analyze()) === 0);
         $this->assertFalse($app->messages->repair());
 
         // Add invalid thread data to user1
@@ -206,7 +208,9 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
         $data['threads'][] = ['id' => 'invalid'];
         $app->data->setValue($dataKeyToBreak, json_encode($data));
 
+        $this->assertTrue(sizeof($app->messages->analyze()) === 1);
         $this->assertTrue($app->messages->repair());
+        $this->assertTrue(sizeof($app->messages->analyze()) === 0);
         $this->assertFalse($app->messages->repair());
     }
 
@@ -225,8 +229,9 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
         $dataKeyToRemove = 'messages/user/7e/58/7e58d63b60197ceb55a1c487989a3720.json'; // user2
         $app->data->delete($dataKeyToRemove);
 
+        $this->assertTrue(sizeof($app->messages->analyze()) === 2);
         $this->assertTrue($app->messages->repair());
+        $this->assertTrue(sizeof($app->messages->analyze()) === 0);
         $this->assertFalse($app->messages->repair());
-
     }
 }
