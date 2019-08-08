@@ -230,6 +230,34 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
         $this->assertEquals($threadsIDs, $expectedThreadsIDs);
     }
 
+    /**
+     * 
+     */
+    public function testDeleteUser()
+    {
+        $app = $this->getApp();
+
+        $thread1ID = $app->messages->getThreadID(['user1', 'user2']);
+        $app->messages->add($thread1ID, 'user2', 'hi');
+
+        $thread2ID = $app->messages->getThreadID(['user1', 'user3']);
+        $app->messages->add($thread2ID, 'user3', 'hi');
+
+        $app->messages->deleteUser('user1');
+
+        $thread1 = $app->messages->getUserThread('user2', $thread1ID);
+        $this->assertEquals($thread1->usersIDs, ['user2']);
+
+        $thread1 = $app->messages->getUserThread('user1', $thread1ID);
+        $this->assertTrue($thread1 === null);
+
+        $thread2 = $app->messages->getUserThread('user3', $thread2ID);
+        $this->assertEquals($thread2->usersIDs, ['user3']);
+
+        $thread2 = $app->messages->getUserThread('user1', $thread2ID);
+        $this->assertTrue($thread1 === null);
+    }
+
     public function testRepairInvalidUserData()
     {
         $app = $this->getApp();

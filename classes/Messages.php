@@ -213,6 +213,19 @@ class Messages
     /**
      * 
      * @param string $userID
+     * @return void
+     */
+    public function deleteUser(string $userID): void
+    {
+        $threads = $this->getUserThreadsList($userID);
+        foreach ($threads as $thread) {
+            $this->deleteUserThread($userID, $thread->id);
+        }
+    }
+
+    /**
+     * 
+     * @param string $userID
      * @param string $threadID
      * @return void
      */
