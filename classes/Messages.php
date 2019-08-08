@@ -662,9 +662,10 @@ class Messages
 
 
     /**
-     * Returns a list containing all the users IDs that have messages
+     * Returns a list containing all the users IDs
      *
      * @return array
+     * @throws Exception
      */
     public function getUsersIDs(): array
     {
@@ -676,10 +677,38 @@ class Messages
                 ->filterBy('key', 'messages/user/' . $prefix . '/', 'startWith')
                 ->sliceProperties(['key']);
             foreach ($list as $item) {
-                $key = $item->key;
-                $userData = json_decode($app->data->getValue($key), true);
-                if (is_array($userData) && isset($userData['id'])) {
-                    $result[] = $userData['id'];
+                $data = json_decode($app->data->getValue($item->key), true);
+                if (is_array($data) && isset($data['id'])) {
+                    $result[] = $data['id'];
+                } else {
+                    throw new \Exception('Corrupted data in ' . $item->key);
+                }
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * Returns a list containing all the threads IDs
+     *
+     * @return array
+     * @throws Exception
+     */
+    public function getThreadsIDs(): array
+    {
+        $result = [];
+        $app = App::get();
+        for ($i = 0; $i < 256; $i++) {
+            $prefix = str_pad(base_convert($i, 10, 16), 2, '0', STR_PAD_LEFT);
+            $list = $app->data->getList()
+                ->filterBy('key', 'messages/thread/' . $prefix . '/', 'startWith')
+                ->sliceProperties(['key']);
+            foreach ($list as $item) {
+                $data = json_decode($app->data->getValue($item->key), true);
+                if (is_array($data) && isset($data['id'])) {
+                    $result[] = $data['id'];
+                } else {
+                    throw new \Exception('Corrupted data in ' . $item->key);
                 }
             }
         }
@@ -719,32 +748,27 @@ class Messages
         $app = App::get();
         $this->clearCache();
 
-        // Check if all threads are correct and in the users data
+        // Build a a list of users threads
         $usersThreads = [];
-        for ($i = 0; $i < 256; $i++) {
-            $prefix = str_pad(base_convert($i, 10, 16), 2, '0', STR_PAD_LEFT);
-            $list = $app->data->getList()
-                ->filterBy('key', 'messages/thread/' . $prefix . '/', 'startWith')
-                ->sliceProperties(['key']);
-            foreach ($list as $item) {
-                $key = $item->key;
-                $threadData = json_decode($app->data->getValue($key), true);
-                if (is_array($threadData)) {
-                    if (isset($threadData['id'], $threadData['usersIDs']) && is_array($threadData['usersIDs'])) {
-                        foreach ($threadData['usersIDs'] as $userID) {
-                            if (!isset($usersThreads[$userID])) {
-                                $usersThreads[$userID] = [];
-                            }
-                            $usersThreads[$userID][] = $threadData['id'];
-                        }
-                    } else {
-                        $errors[] = $key . ' is invalid';
-                    }
+        $threadsWithNoUsers = [];
+        $threadsIDs = $this->getThreadsIDs();
+        foreach ($threadsIDs as $threadID) {
+            $threadData = $this->getThreadData($threadID);
+            if (is_array($threadData)) {
+                if (!isset($threadData['usersIDs']) || empty($threadData['usersIDs'])) {
+                    $threadsWithNoUsers[] = $threadID;
                 } else {
-                    $errors[] = $key . ' is not valid JSON';
+                    foreach ($threadData['usersIDs'] as $userID) {
+                        if (!isset($usersThreads[$userID])) {
+                            $usersThreads[$userID] = [];
+                        }
+                        $usersThreads[$userID][] = $threadData['id'];
+                    }
                 }
             }
+            $this->clearCache(); // save memory
         }
+
         $usersIDsToRemoveFromThreads = [];
         foreach ($usersThreads as $userID => $expectedUserThreads) {
             $this->lockUserData($userID);
@@ -783,11 +807,9 @@ class Messages
                         $this->setUserData($userID, $userData);
                     }
                 }
-            } else {
-                $errors[] = 'User data (' . $userID . ') is invalid';
             }
             $this->unlockUserData($userID);
-            $this->clearCache(); // to save memory
+            $this->clearCache(); // save memory
         }
         if (!empty($usersIDsToRemoveFromThreads)) {
             foreach ($usersIDsToRemoveFromThreads as $threadID => $usersIDs) {
@@ -799,8 +821,17 @@ class Messages
                     }
                 }
                 $this->unlockThreadData($threadID);
-                $this->clearCache(); // to save memory
+                $this->clearCache(); // save memory
             }
+        }
+        foreach ($threadsWithNoUsers as $threadID) {
+            $this->lockThreadData($threadID);
+            $errors[] = 'The thread "' . $threadID . '" was removed because it has no users';
+            if ($repair) {
+                $this->deleteThreadData($threadID);
+            }
+            $this->unlockThreadData($threadID);
+            $this->clearCache(); // save memory
         }
         $this->clearCache();
         //print_r($errors);
