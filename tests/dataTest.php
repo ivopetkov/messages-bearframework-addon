@@ -121,6 +121,7 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
         $app->messages->add($thread2ID, 'user3', 'hi user1');
         sleep(1); //added for sorting precision
         $list = $app->messages->getUserThreadsList('user1');
+        $list->sortBy('lastUpdateDate', 'desc');
         $this->assertTrue($list->count() === 2);
         $this->assertTrue($list[0]->status === 'unread');
         $this->assertTrue($list[0]->messagesList[1]->userID === 'user3');
@@ -152,6 +153,7 @@ class DataTest extends BearFramework\AddonTests\PHPUnitTestCase
         sleep(1); //added for sorting precision
 
         $list = $app->messages->getUsersThreadsList(['user1', 'userA']);
+        $list->sortBy('lastUpdateDate', 'desc');
         $this->assertTrue($list->count() === 4);
         $this->assertTrue($list[0]->messagesList[0]->text === 'hi userB');
         $this->assertTrue($list[1]->messagesList[0]->text === 'hi user2, its userA');

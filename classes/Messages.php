@@ -49,8 +49,7 @@ class Messages
                     }
                 }
             }
-            $threadsLastUpdatedDates = [];
-            $threadsUsers = [];
+            $result = [];
             foreach ($usersIDs as $userID) {
                 $userData = $this->getUserData($userID);
                 if (is_array($userData)) {
@@ -60,9 +59,9 @@ class Messages
                         if (!isset($userThreadsListData['threads'][$threadID])) {
                             throw new \Exception('Should not get here');
                         }
+                        $threadRawDataFromUserThreadsListData = $userThreadsListData['threads'][$threadID];
                         $add = true;
-                        $lastMessageID = (string) $userThreadsListData['threads'][$threadID][0];
-                        $lastUpdateDate = $userThreadsListData['threads'][$threadID][1];
+                        $lastMessageID = (string) $threadRawDataFromUserThreadsListData[0];
                         if (strlen($lastMessageID) === 0 && !$includeEmptyThreads) {
                             $add = false;
                         }
@@ -74,19 +73,12 @@ class Messages
                             }
                         }
                         if ($add) {
-                            $threadsLastUpdatedDates[$threadID] = $lastUpdateDate;
-                            $threadsUsers[$threadID] = $userID;
+                            $result[] = function () use ($threadID, $userThreadData, $threadRawDataFromUserThreadsListData) {
+                                return $this->makeUserThread($threadID, $userThreadData, $threadRawDataFromUserThreadsListData);
+                            };
                         }
                     }
                 }
-            }
-            arsort($threadsLastUpdatedDates);
-            $result = [];
-            foreach ($threadsLastUpdatedDates as $threadID => $lastUpdateDate) {
-                $userID = $threadsUsers[$threadID];
-                $result[] = function () use ($userID, $threadID) {
-                    return $this->getUserThread($userID, $threadID);
-                };
             }
             return $result;
         });
@@ -112,25 +104,37 @@ class Messages
     {
         $userData = $this->getUserData($userID);
         if (is_array($userData)) {
-            $userThreadsListData = $this->getTempUserThreadsListData($userID);
+            $userThreadsListData = $this->getTempUserThreadsListData($userID, true, $userData);
             foreach ($userData['threads'] as $threadData) {
                 if ($threadData['id'] === $threadID) {
-                    $userThread = new UserThread();
-                    $userThread->id = $threadID;
-                    $read = true;
-                    if (isset($userThreadsListData['threads'][$threadID])) {
-                        $lastMessageID = (string) $userThreadsListData['threads'][$threadID][0];
-                        $userThread->lastUpdateDate = $userThreadsListData['threads'][$threadID][1];
-                        $read = (isset($threadData['lastReadMessageID']) ? (string) $threadData['lastReadMessageID'] : '') === $lastMessageID;
-                    } else {
-                        $read = false;
-                    }
-                    $userThread->status = $read ? 'read' : 'unread';
-                    return $userThread;
+                    return $this->makeUserThread($threadID, $threadData, isset($userThreadsListData['threads'][$threadID]) ? $userThreadsListData['threads'][$threadID] : null);
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * 
+     * @param string $threadID
+     * @param array $userThreadData
+     * @param array $threadRawDataFromUserThreadsListData
+     * @return \IvoPetkov\BearFrameworkAddons\Messages\UserThread
+     */
+    private function makeUserThread(string $threadID, array $userThreadData, array $threadRawDataFromUserThreadsListData = null): \IvoPetkov\BearFrameworkAddons\Messages\UserThread
+    {
+        $userThread = new UserThread();
+        $userThread->id = $threadID;
+        $read = true;
+        if ($threadRawDataFromUserThreadsListData !== null) {
+            $lastMessageID = (string) $threadRawDataFromUserThreadsListData[0];
+            $userThread->lastUpdateDate = $threadRawDataFromUserThreadsListData[1];
+            $read = (isset($userThreadData['lastReadMessageID']) ? (string) $userThreadData['lastReadMessageID'] : '') === $lastMessageID;
+        } else {
+            $read = false;
+        }
+        $userThread->status = $read ? 'read' : 'unread';
+        return $userThread;
     }
 
     /**
