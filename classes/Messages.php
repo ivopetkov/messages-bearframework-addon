@@ -10,6 +10,7 @@
 namespace IvoPetkov\BearFrameworkAddons;
 
 use BearFramework\App;
+use IvoPetkov\BearFrameworkAddons\Messages\Internal\Utilities;
 use IvoPetkov\BearFrameworkAddons\Messages\UserThread;
 
 /**
@@ -19,12 +20,6 @@ class Messages
 {
 
     use \BearFramework\EventsTrait;
-
-    /**
-     *
-     * @var array 
-     */
-    static private $cache = [];
 
     /**
      * 
@@ -161,7 +156,7 @@ class Messages
      */
     private function removeUserFromThreadData(string $userID, string $threadID): void
     {
-        $threadData = $this->getThreadData($threadID);
+        $threadData = Utilities::getThreadData($threadID);
         if (is_array($threadData)) {
             $userIDIndex = array_search($userID, $threadData['usersIDs']);
             if ($userIDIndex !== false) {
@@ -235,7 +230,7 @@ class Messages
      */
     public function markUserThreadAsRead(string $userID, string $threadID): void
     {
-        $threadData = $this->getThreadData($threadID);
+        $threadData = Utilities::getThreadData($threadID);
         if (is_array($threadData)) {
             $lastMessage = end($threadData['messages']);
             $this->lockUserData($userID);
@@ -272,8 +267,8 @@ class Messages
     {
         $app = App::get();
         $cacheKey = 'userThreadsListData-' . $userID;
-        if (isset(self::$cache[$cacheKey])) {
-            $tempData = self::$cache[$cacheKey];
+        if (isset(Utilities::$cache[$cacheKey])) {
+            $tempData = Utilities::$cache[$cacheKey];
         } else {
             $tempUserThreadsListDataKey = $this->getTempUserThreadsListDataKey($userID);
             $tempData = [];
@@ -288,7 +283,7 @@ class Messages
                     $tempData = $_tempData;
                 }
             }
-            self::$cache[$cacheKey] = $tempData;
+            Utilities::$cache[$cacheKey] = $tempData;
         }
         if (!isset($tempData['id'])) {
             $tempData['id'] = $userID;
@@ -316,7 +311,7 @@ class Messages
                 $result['threads'][$threadID] = $tempData['threads'][$threadID];
             } else {
                 if ($updateMissing) {
-                    $threadData = $this->getThreadData($threadID);
+                    $threadData = Utilities::getThreadData($threadID);
                     $otherUsersIDs = [];
                     if (is_array($threadData)) {
                         $otherUsersIDs = array_values(array_diff($threadData['usersIDs'], [$userID]));
@@ -360,7 +355,7 @@ class Messages
             $app->data->set($app->data->make($tempUserThreadsListDataKey, gzcompress(json_encode($data))));
         }
         $cacheKey = 'userThreadsListData-' . $userID;
-        self::$cache[$cacheKey] = $data;
+        Utilities::$cache[$cacheKey] = $data;
     }
 
     /**
@@ -372,8 +367,8 @@ class Messages
     private function getUserData(string $userID): ?array
     {
         $cacheKey = 'userData-' . $userID;
-        if (isset(self::$cache[$cacheKey]) || array_key_exists($cacheKey, self::$cache)) { // the second check handles the null value
-            return self::$cache[$cacheKey];
+        if (isset(Utilities::$cache[$cacheKey]) || array_key_exists($cacheKey, Utilities::$cache)) { // the second check handles the null value
+            return Utilities::$cache[$cacheKey];
         } else {
             $app = App::get();
             $userDataKey = $this->getUserDataKey($userID);
@@ -381,12 +376,12 @@ class Messages
             if ($userDataValue !== null) {
                 $userData = json_decode($userDataValue, true);
                 if (is_array($userData) && isset($userData['id']) && $userData['id'] === $userID) {
-                    self::$cache[$cacheKey] = $userData;
+                    Utilities::$cache[$cacheKey] = $userData;
                     return $userData;
                 }
                 throw new \Exception('Corrupted data for user ' . $userID);
             }
-            self::$cache[$cacheKey] = null;
+            Utilities::$cache[$cacheKey] = null;
             return null;
         }
     }
@@ -407,35 +402,7 @@ class Messages
             $app->data->set($app->data->make($userDataKey, json_encode($data)));
         }
         $cacheKey = 'userData-' . $userID;
-        self::$cache[$cacheKey] = $data;
-    }
-
-    /**
-     * 
-     * @param string $threadID
-     * @return array|null
-     * @throws \Exception
-     */
-    private function getThreadData(string $threadID): ?array
-    {
-        $cacheKey = 'threadData-' . $threadID;
-        if (isset(self::$cache[$cacheKey]) || array_key_exists($cacheKey, self::$cache)) { // the second check handles the null value
-            return self::$cache[$cacheKey];
-        } else {
-            $app = App::get();
-            $threadDataKey = $this->getThreadDataKey($threadID);
-            $threadDataValue = $app->data->getValue($threadDataKey);
-            if ($threadDataValue !== null) {
-                $threadData = json_decode($threadDataValue, true);
-                if (is_array($threadData) && isset($threadData['id']) && $threadData['id'] === $threadID) {
-                    self::$cache[$cacheKey] = $threadData;
-                    return $threadData;
-                }
-                throw new \Exception('Corrupted data for thread ' . $threadID);
-            }
-            self::$cache[$cacheKey] = null;
-            return null;
-        }
+        Utilities::$cache[$cacheKey] = $data;
     }
 
     /**
@@ -446,11 +413,11 @@ class Messages
     private function deleteThreadData(string $threadID): void
     {
         $cacheKey = 'threadData-' . $threadID;
-        if (array_key_exists($cacheKey, self::$cache)) {
-            unset(self::$cache[$cacheKey]);
+        if (array_key_exists($cacheKey, Utilities::$cache)) {
+            unset(Utilities::$cache[$cacheKey]);
         }
         $app = App::get();
-        $threadDataKey = $this->getThreadDataKey($threadID);
+        $threadDataKey = Utilities::getThreadDataKey($threadID);
         $newThreadDataKey = '.recyclebin/' . $threadDataKey;
         $app->data->rename($threadDataKey, $newThreadDataKey);
     }
@@ -464,11 +431,11 @@ class Messages
     private function setThreadData(string $threadID, array $data): void
     {
         $app = App::get();
-        $threadDataKey = $this->getThreadDataKey($threadID);
+        $threadDataKey = Utilities::getThreadDataKey($threadID);
         $dataItem = $app->data->make($threadDataKey, json_encode($data));
         $app->data->set($dataItem);
         $cacheKey = 'threadData-' . $threadID;
-        self::$cache[$cacheKey] = $data;
+        Utilities::$cache[$cacheKey] = $data;
     }
 
     /**
@@ -519,7 +486,7 @@ class Messages
             return null;
         }
         $threadID = md5(uniqid() . $usersIDsAsJSON);
-        if ($this->getThreadData($threadID) !== null) {
+        if (Utilities::getThreadData($threadID) !== null) {
             throw new \Exception('Thread ID collision');
         }
         $this->lockThreadData($threadID);
@@ -579,7 +546,7 @@ class Messages
             $this->dispatchEvent('beforeAddMessage', $eventDetails);
         }
         $this->lockThreadData($threadID);
-        $threadData = $this->getThreadData($threadID);
+        $threadData = Utilities::getThreadData($threadID);
         if ($threadData === null) {
             $this->unlockThreadData($threadID);
             throw new \Exception('Invalid thread ' . $threadID);
@@ -762,15 +729,14 @@ class Messages
     private function repairData(bool $repair): array
     {
         $errors = [];
-        $app = App::get();
-        $this->clearCache();
+        Utilities::clearCache();
 
         // Build a a list of users threads
         $usersThreads = [];
         $threadsWithNoUsers = [];
         $threadsIDs = $this->getThreadsIDs();
         foreach ($threadsIDs as $threadID) {
-            $threadData = $this->getThreadData($threadID);
+            $threadData = Utilities::getThreadData($threadID);
             if (is_array($threadData)) {
                 if (!isset($threadData['usersIDs']) || empty($threadData['usersIDs'])) {
                     $threadsWithNoUsers[] = $threadID;
@@ -783,7 +749,7 @@ class Messages
                     }
                 }
             }
-            $this->clearCache(); // save memory
+            Utilities::clearCache(); // save memory
         }
 
         $usersIDsToRemoveFromThreads = [];
@@ -826,7 +792,7 @@ class Messages
                 }
             }
             $this->unlockUserData($userID);
-            $this->clearCache(); // save memory
+            Utilities::clearCache(); // save memory
         }
         if (!empty($usersIDsToRemoveFromThreads)) {
             foreach ($usersIDsToRemoveFromThreads as $threadID => $usersIDs) {
@@ -838,7 +804,7 @@ class Messages
                     }
                 }
                 $this->unlockThreadData($threadID);
-                $this->clearCache(); // save memory
+                Utilities::clearCache(); // save memory
             }
         }
         foreach ($threadsWithNoUsers as $threadID) {
@@ -848,21 +814,11 @@ class Messages
                 $this->deleteThreadData($threadID);
             }
             $this->unlockThreadData($threadID);
-            $this->clearCache(); // save memory
+            Utilities::clearCache(); // save memory
         }
-        $this->clearCache();
+        Utilities::clearCache();
         //print_r($errors);
         return $errors;
-    }
-
-    /**
-     * Clears the data cache
-     *
-     * @return void
-     */
-    private function clearCache(): void
-    {
-        self::$cache = [];
     }
 
     /**
@@ -875,18 +831,6 @@ class Messages
     {
         $userIDMD5 = md5($userID);
         return '.temp/messages/userthreads/' . substr($userIDMD5, 0, 2) . '/' . substr($userIDMD5, 2, 2) . '/' . $userIDMD5 . '.json';
-    }
-
-    /**
-     * 
-     *
-     * @param string $threadID
-     * @return string
-     */
-    private function getThreadDataKey(string $threadID): string
-    {
-        $threadIDMD5 = md5($threadID);
-        return 'messages/thread/' . substr($threadIDMD5, 0, 2) . '/' . substr($threadIDMD5, 2, 2) . '/' . $threadIDMD5 . '.json';
     }
 
     /**
