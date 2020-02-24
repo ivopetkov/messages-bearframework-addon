@@ -17,6 +17,6 @@ $context->classes
         ->add('IvoPetkov\BearFrameworkAddons\Messages\*', 'classes/Messages/*.php');
 
 $app->shortcuts
-        ->add('messages', function() {
-            return new IvoPetkov\BearFrameworkAddons\Messages();
+        ->add('messages', function () {
+                return new IvoPetkov\BearFrameworkAddons\Messages();
         });

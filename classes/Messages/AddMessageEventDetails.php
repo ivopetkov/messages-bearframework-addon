@@ -28,19 +28,17 @@ class AddMessageEventDetails
     public function __construct(string $threadID, string $userID, string $text)
     {
         $this
-                ->defineProperty('threadID', [
-                    'type' => 'string'
-                ])
-                ->defineProperty('userID', [
-                    'type' => 'string'
-                ])
-                ->defineProperty('text', [
-                    'type' => 'string'
-                ])
-        ;
+            ->defineProperty('threadID', [
+                'type' => 'string'
+            ])
+            ->defineProperty('userID', [
+                'type' => 'string'
+            ])
+            ->defineProperty('text', [
+                'type' => 'string'
+            ]);
         $this->threadID = $threadID;
         $this->userID = $userID;
         $this->text = $text;
     }
-
 }

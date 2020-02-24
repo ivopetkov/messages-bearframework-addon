@@ -30,52 +30,51 @@ class Thread
     function __construct()
     {
 
-        $this->defineProperty('usersIDs', [
-            'init' => function () {
-                $threadData = Utilities::getThreadData($this->id);
-                return isset($threadData['usersIDs']) ? $threadData['usersIDs'] : [];
-            },
-            'readonly' => true
-        ]);
-
-        $this->defineProperty('messagesList', [
-            'init' => function () {
-                return new \BearFramework\DataList(function () {
-                    $result = [];
+        $this
+            ->defineProperty('usersIDs', [
+                'init' => function () {
+                    $threadData = Utilities::getThreadData($this->id);
+                    return isset($threadData['usersIDs']) ? $threadData['usersIDs'] : [];
+                },
+                'readonly' => true
+            ])
+            ->defineProperty('messagesList', [
+                'init' => function () {
+                    return new \BearFramework\DataList(function () {
+                        $result = [];
+                        $threadData = Utilities::getThreadData($this->id);
+                        if (is_array($threadData) && isset($threadData['messages'])) {
+                            foreach ($threadData['messages'] as $messageData) {
+                                $message = new Message();
+                                $message->id = $messageData['id'];
+                                $message->userID = $messageData['userID'];
+                                $message->text = $messageData['text'];
+                                $message->dateCreated = $messageData['dateCreated'];
+                                $result[] = $message;
+                            }
+                        }
+                        return $result;
+                    });
+                },
+                'readonly' => true
+            ])
+            ->defineProperty('lastMessage', [
+                'init' => function () {
                     $threadData = Utilities::getThreadData($this->id);
                     if (is_array($threadData) && isset($threadData['messages'])) {
-                        foreach ($threadData['messages'] as $messageData) {
+                        $lastMessageData = end($threadData['messages']);
+                        if ($lastMessageData !== false) {
                             $message = new Message();
-                            $message->id = $messageData['id'];
-                            $message->userID = $messageData['userID'];
-                            $message->text = $messageData['text'];
-                            $message->dateCreated = $messageData['dateCreated'];
-                            $result[] = $message;
+                            $message->id = $lastMessageData['id'];
+                            $message->userID = $lastMessageData['userID'];
+                            $message->text = $lastMessageData['text'];
+                            $message->dateCreated = $lastMessageData['dateCreated'];
+                            return $message;
                         }
                     }
-                    return $result;
-                });
-            },
-            'readonly' => true
-        ]);
-
-        $this->defineProperty('lastMessage', [
-            'init' => function () {
-                $threadData = Utilities::getThreadData($this->id);
-                if (is_array($threadData) && isset($threadData['messages'])) {
-                    $lastMessageData = end($threadData['messages']);
-                    if ($lastMessageData !== false) {
-                        $message = new Message();
-                        $message->id = $lastMessageData['id'];
-                        $message->userID = $lastMessageData['userID'];
-                        $message->text = $lastMessageData['text'];
-                        $message->dateCreated = $lastMessageData['dateCreated'];
-                        return $message;
-                    }
-                }
-                return null;
-            },
-            'readonly' => true
-        ]);
+                    return null;
+                },
+                'readonly' => true
+            ]);
     }
 }

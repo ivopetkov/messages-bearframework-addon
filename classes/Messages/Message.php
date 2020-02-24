@@ -20,24 +20,22 @@ class Message
      * @var string
      */
     public $id = null;
-    
+
     /**
      *
      * @var string
      */
     public $userID = null;
-    
+
     /**
      *
      * @var string
      */
     public $text = null;
-    
+
     /**
      *
      * @var int
      */
     public $dateCreated = null;
-    
-
 }
