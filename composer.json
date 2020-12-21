@@ -18,7 +18,7 @@
     "require": {
         "php": ">=7.1",
         "bearframework/bearframework": "1.*",
-        "ivopetkov/data-object": "0.7.*|0.8.*",
+        "ivopetkov/data-object": "0.7.*|0.8.*|0.9.*",
         "ivopetkov/locks-bearframework-addon": "0.1.*"
     },
     "require-dev": {
