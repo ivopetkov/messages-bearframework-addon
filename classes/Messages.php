@@ -116,7 +116,7 @@ class Messages
      * @param array $threadRawDataFromUserThreadsListData
      * @return \IvoPetkov\BearFrameworkAddons\Messages\UserThread
      */
-    private function makeUserThread(string $threadID, array $userThreadData, array $threadRawDataFromUserThreadsListData = null): \IvoPetkov\BearFrameworkAddons\Messages\UserThread
+    private function makeUserThread(string $threadID, array $userThreadData, ?array $threadRawDataFromUserThreadsListData = null): \IvoPetkov\BearFrameworkAddons\Messages\UserThread
     {
         $userThread = new UserThread();
         $userThread->id = $threadID;
@@ -522,7 +522,7 @@ class Messages
     {
         $userData = $this->getUserData($userID);
         if (is_array($userData)) {
-            foreach ($userData['threads'] as $i => $userThreadData) {
+            foreach ($userData['threads'] as $userThreadData) {
                 if ($userThreadData['id'] === $threadID) {
                     return true;
                 }
